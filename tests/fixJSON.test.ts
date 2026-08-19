@@ -87,6 +87,35 @@ describe("fixJSON", () => {
     expect(parsed.items).toEqual([1, 5, 10]);
   });
 
+  // Casos reais do QA com custeio-municipal-12-25
+  it("deve converter 5.425,00 para 5425.00 (QA real)", () => {
+    const input = '{"isNotaFiscal":true,"notaNumber":"1244","companyName":"Departamento de Tributacao","valor":5.425,00,"pessoaNome":null,"documentType":"nota_fiscal"}';
+    const result = fixJSON(input);
+    const parsed = JSON.parse(result);
+    expect(parsed.valor).toBe(5425.00);
+  });
+
+  it("deve converter 913,00 para 913.00 (QA real)", () => {
+    const input = '{"isNotaFiscal":true,"notaNumber":"1352540002175940","companyName":"CECILIA GOBBO PAPELARIA ME","valor":913,00,"pessoaNome":null,"documentType":"nota_fiscal"}';
+    const result = fixJSON(input);
+    const parsed = JSON.parse(result);
+    expect(parsed.valor).toBe(913.00);
+  });
+
+  it("deve converter 151,44 para 151.44 (QA real)", () => {
+    const input = '{"isNotaFiscal":true,"notaNumber":"001716489","companyName":"Cacola Embalagens Ltda.","valor":151,44,"pessoaNome":null,"documentType":"nota_fiscal"}';
+    const result = fixJSON(input);
+    const parsed = JSON.parse(result);
+    expect(parsed.valor).toBe(151.44);
+  });
+
+  it("não deve converter [1,2,3] para [1.2,3] (array de inteiros)", () => {
+    const input = '{"items":[1,2,3]}';
+    const result = fixJSON(input);
+    const parsed = JSON.parse(result);
+    expect(parsed.items).toEqual([1, 2, 3]);
+  });
+
   it("deve corrigir 1.234,56 sem espaço após vírgula", () => {
     const input = '{"valor":1.234,56,"nome":"teste"}';
     const result = fixJSON(input);

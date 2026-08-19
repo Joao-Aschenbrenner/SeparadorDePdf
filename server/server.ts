@@ -41,12 +41,17 @@ interface ModelsCatalog {
 
 let cachedCatalog: ModelsCatalog | null = null;
 
+// __dirname compat entre ESM (tsx dev) e CJS (bundle dist)
+const THIS_DIR: string = typeof __dirname !== "undefined"
+  ? __dirname
+  : (typeof import.meta !== "undefined" && (import.meta as any).dirname ? (import.meta as any).dirname : process.cwd());
+
 function loadModelsCatalog(): ModelsCatalog {
   if (cachedCatalog) return cachedCatalog;
   // Resolve models.json em múltiplos caminhos candidatos (dev tsx, bundle dist/, Electron asar)
   const candidates = [
-    path.join(__dirname, "models.json"),
-    path.join(__dirname, "..", "server", "models.json"),
+    path.join(THIS_DIR, "models.json"),
+    path.join(THIS_DIR, "..", "server", "models.json"),
     path.join(process.cwd(), "server", "models.json"),
     path.join(process.cwd(), "models.json"),
   ];
@@ -179,12 +184,81 @@ function fixJSON(raw: string): string {
   s = s.replace(/,+/g, ',');
   s = s.replace(/,\s*$/, '');
   s = s.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
-  // Fix Brazilian number format: 1.234,56 -> 1234.56
-  s = s.replace(/(\d+)\.(\d{3}),(\d{2})(?=[,}\]])/g, '$1$2.$3');
+  // Fix Brazilian number format inside JSON values:
+  // 5.425,00 -> 5425.00 (thousands point + decimal comma)
+  s = s.replace(/(:\s*)(\d+)\.(\d{3}),(\d{2})(?=[,}\]])/g, '$1$2$3.$4');
+  // 1.234.567,89 -> 1234567.89 (multiple thousands separators) — só após :
+  s = s.replace(/(:\s*)(\d(?:\d*\.\d{3})+),(\d{2})(?=[,}\]])/g, (_m, p1, p2, p3) => p1 + p2.replace(/\./g, '') + '.' + p3);
+  // 151,44 -> 151.44 (decimal only, no thousands separator) — só após : (evita arrays [1,2,3])
+  s = s.replace(/(:\s*)(\d+),(\d{1,2})(?=[,}\]])/g, '$1$2.$3');
   return s;
 }
 
 export { fixJSON };
+
+// ═══ Helpers para parser JSON robusto (multiplos objetos colados) ═══
+
+// Conta quantos objetos {...} de nivel raiz existem no texto (separados por espaco/virgula/quebra de linha)
+function hasMultipleObjects(text: string): boolean {
+  let depth = 0;
+  let rootObjects = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (escape) { escape = false; continue; }
+    if (inString) {
+      if (ch === "\\") escape = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') { inString = true; continue; }
+    if (ch === "{") {
+      if (depth === 0) rootObjects++;
+      depth++;
+    } else if (ch === "}") {
+      depth--;
+    }
+  }
+  return rootObjects > 1;
+}
+
+// Extrai cada objeto {...} de nivel raiz como string separada (mesmo se colados ou separados por espaco)
+function extractIndividualObjects(text: string): string[] {
+  const objs: string[] = [];
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let escape = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (escape) { escape = false; continue; }
+    if (inString) {
+      if (ch === "\\") escape = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') { inString = true; continue; }
+    if (ch === "{") {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (ch === "}") {
+      depth--;
+      if (depth === 0 && start !== -1) {
+        objs.push(text.substring(start, i + 1));
+        start = -1;
+      }
+    }
+  }
+  return objs;
+}
+
+// Envolve multiplos objetos {...} {...} em um array: [ {...}, {...} ]
+function wrapObjectsInArray(text: string): string {
+  const objs = extractIndividualObjects(text);
+  if (objs.length <= 1) return text;
+  return "[" + objs.join(",") + "]";
+}
 export async function startServer(port: number = DEFAULT_PORT, isDev: boolean = false) {
   const app = express();
   const PORT = port;
@@ -275,7 +349,9 @@ REGRAS:
 IMPORTANTE: Se a página contiver MAIS DE UM documento (ex: 2 holerites lado a lado, ou um holerite em cima e outro embaixo), retorne um ARRAY de objetos: [{...documento1...}, {...documento2...}].
 
 Se não encontrar valor, coloque null. Não invente números.
-NÃO escreva NADA antes ou depois do JSON. NÃO use markdown. NÃO use **. A resposta deve COMEÇAR com { ou [ e TERMINAR com } ou ].
+NÃO escreva NADA antes ou depois do JSON. NÃO use markdown. NÃO use **. NÃO explique o documento. NÃO escreva "Análise do Documento" ou qualquer texto introdutório. A resposta deve SER SOMENTE o JSON, começando com { ou [ e terminando com } ou ]. Qualquer texto fora do JSON é ERRO.
+
+IMPORTANTE sobre valores numéricos: use SEMPRE formato americano com ponto decimal. Exemplo: R$ 5.425,00 deve ser escrito como 5425.00 (sem pontos de milhar, com ponto decimal). Nunca use vírgula como separador decimal no JSON.
 
 ${correction ? `OBSERVAÇÃO DO USUÁRIO: ${correction}. Reavalie o documento com atenção especial nestes campos.\n` : ""}`;
 
@@ -451,14 +527,28 @@ ${correction ? `OBSERVAÇÃO DO USUÁRIO: ${correction}. Reavalie o documento co
         .replace(/\*+/g, "")
         .trim();
 
-      // Extract JSON from response: find first [ or { and matching closing bracket
+      // Extract JSON from response. Robusto contra:
+      // - markdown envolvendo o JSON
+      // - multiplos objetos {...} {...} colados (sem array) — comum quando a IA ve 2 holerites
+      // - JSON cortado no final
       const trimmed = cleaned;
       let jsonStr: string;
-      if (trimmed.startsWith("[")) {
+
+      if (trimmed.includes("[")) {
+        // Tenta array primeiro: do primeiro [ ao ultimo ]
+        const arrStart = trimmed.indexOf("[");
         const arrEnd = trimmed.lastIndexOf("]");
-        if (arrEnd === -1) throw new Error("Array JSON não tem fechamento ]");
-        jsonStr = trimmed.substring(0, arrEnd + 1);
+        if (arrStart !== -1 && arrEnd !== -1 && arrEnd > arrStart) {
+          jsonStr = trimmed.substring(arrStart, arrEnd + 1);
+        } else {
+          // Sem ], envolve tudo que tem { em array
+          jsonStr = wrapObjectsInArray(trimmed);
+        }
+      } else if (hasMultipleObjects(trimmed)) {
+        // Multiplos {...} {...} sem [ ] — envolve em array
+        jsonStr = wrapObjectsInArray(trimmed);
       } else {
+        // Objeto unico: do primeiro { ao ultimo }
         const jsonStart = trimmed.indexOf("{");
         const jsonEnd = trimmed.lastIndexOf("}");
         if (jsonStart === -1 || jsonEnd === -1) {
@@ -477,6 +567,19 @@ ${correction ? `OBSERVAÇÃO DO USUÁRIO: ${correction}. Reavalie o documento co
           parseSucceeded = true;
           break;
         } catch {}
+      }
+      // Ultima tentativa: se ainda falhou e era multiplos objetos, tenta parsear cada um individualmente
+      if (!parseSucceeded) {
+        const objs = extractIndividualObjects(jsonStr);
+        if (objs.length > 1) {
+          const parsed = [];
+          for (const o of objs) {
+            for (const attempt of [o, fixJSON(o)]) {
+              try { parsed.push(JSON.parse(attempt)); break; } catch {}
+            }
+          }
+          if (parsed.length > 0) { extractedData = parsed; parseSucceeded = true; }
+        }
       }
       if (!parseSucceeded) {
         await logUpload(originalName, pageIndex, "error", provider, `JSON inválido: ${jsonStr.substring(0, 500)}`);
