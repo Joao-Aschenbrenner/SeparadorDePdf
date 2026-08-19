@@ -36,6 +36,23 @@ describe("Catálogo de modelos (server/models.json)", () => {
       }
     }
   });
+
+  it("catálogo cobre os 10 providers (7 cloud + 3 novos)", () => {
+    const catalog = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "server", "models.json"), "utf8"));
+    const expected = ["NVIDIA", "GOOGLE", "OPENAI", "ANTHROPIC", "MISTRAL", "OPENROUTER", "GROQ", "LOCAL_OLLAMA", "OLLAMA_CLOUD", "CODEX"];
+    for (const p of expected) {
+      expect(catalog.providers[p], `${p} ausente do catálogo`).toBeDefined();
+    }
+  });
+
+  it("LOCAL_OLLAMA tem flag local=true e downloadSizes/minRamGB", () => {
+    const catalog = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "server", "models.json"), "utf8"));
+    const local = catalog.providers.LOCAL_OLLAMA;
+    expect(local.local).toBe(true);
+    expect(local.downloadSizes).toBeDefined();
+    expect(local.minRamGB).toBeDefined();
+    expect(local.baseUrl).toBe("http://localhost:11434");
+  });
 });
 
 describe("getProviderConfig (catálogo e fallback)", () => {

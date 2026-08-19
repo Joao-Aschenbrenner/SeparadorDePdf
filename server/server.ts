@@ -13,13 +13,16 @@ const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
 // Catálogo de modelos: lê server/models.json (atualizado mensalmente via CI).
 // Fallback hardcoded caso o arquivo não exista ou esteja corrompido.
 const FALLBACK_MODELS: Record<string, { baseUrl: string; model: string }> = {
-  NVIDIA: { baseUrl: "https://integrate.api.nvidia.com", model: "meta/llama-4-scout-17b-16e-instruct" },
+  NVIDIA: { baseUrl: "https://integrate.api.nvidia.com", model: "meta/llama-3.2-90b-vision-instruct" },
   GOOGLE: { baseUrl: "https://generativelanguage.googleapis.com", model: "gemini-2.5-flash" },
   OPENAI: { baseUrl: "https://api.openai.com", model: "gpt-4o" },
   ANTHROPIC: { baseUrl: "https://api.anthropic.com", model: "claude-sonnet-4-20250514" },
   MISTRAL: { baseUrl: "https://api.mistral.ai", model: "pixtral-12b-2409" },
   OPENROUTER: { baseUrl: "https://openrouter.ai/api", model: "google/gemini-2.5-flash" },
   GROQ: { baseUrl: "https://api.groq.com/openai", model: "meta-llama/llama-4-scout-17b-16e-instruct" },
+  LOCAL_OLLAMA: { baseUrl: "http://localhost:11434", model: "llama3.2-vision:11b" },
+  OLLAMA_CLOUD: { baseUrl: "https://chat.api.ollama.ai", model: "llama3.2-vision:11b" },
+  CODEX: { baseUrl: "https://api.codex.ai", model: "gpt-4o" },
 };
 
 interface ModelsCatalog {
@@ -30,6 +33,9 @@ interface ModelsCatalog {
     modelsEndpoint?: string;
     visionKeywords?: string[];
     preferred?: string[];
+    local?: boolean;
+    downloadSizes?: Record<string, string>;
+    minRamGB?: Record<string, number>;
   }>;
 }
 
@@ -347,22 +353,47 @@ ${correction ? `OBSERVAÇÃO DO USUÁRIO: ${correction}. Reavalie o documento co
                top_p: 0.9
              })
            });
-           } else if (provider === "OPENROUTER") {
-             if (!apiKey) throw new Error("Chave de API OpenRouter não configurada.");
-             const openrouterModel = getProviderConfig("OPENROUTER").model;
-             console.log(`[AI] Enviando para OpenRouter (${openrouterModel})...`);
-             aiResponse = await callOpenAICompatible({ baseUrl: "https://openrouter.ai/api", model: openrouterModel, apiKey }, imageBase64, prompt);
-           } else if (provider === "GROQ") {
-             if (!apiKey) throw new Error("Chave de API Groq não configurada.");
-             const groqModel = getProviderConfig("GROQ").model;
-             console.log(`[AI] Enviando para Groq (${groqModel})...`);
-             aiResponse = await callOpenAICompatible({ baseUrl: "https://api.groq.com/openai", model: groqModel, apiKey }, imageBase64, prompt);
-           } else {
-             // NVIDIA (padrão)
-             const nvidiaModel = getProviderConfig("NVIDIA").model;
-             console.log(`[AI] Enviando para NVIDIA (${nvidiaModel})...`);
-             aiResponse = await callOpenAICompatible({ baseUrl: "https://integrate.api.nvidia.com", model: nvidiaModel, apiKey }, imageBase64, prompt);
-           }
+            } else if (provider === "OPENROUTER") {
+              if (!apiKey) throw new Error("Chave de API OpenRouter não configurada.");
+              const openrouterModel = getProviderConfig("OPENROUTER").model;
+              console.log(`[AI] Enviando para OpenRouter (${openrouterModel})...`);
+              aiResponse = await callOpenAICompatible({ baseUrl: "https://openrouter.ai/api", model: openrouterModel, apiKey }, imageBase64, prompt);
+            } else if (provider === "GROQ") {
+              if (!apiKey) throw new Error("Chave de API Groq não configurada.");
+              const groqModel = getProviderConfig("GROQ").model;
+              console.log(`[AI] Enviando para Groq (${groqModel})...`);
+              aiResponse = await callOpenAICompatible({ baseUrl: "https://api.groq.com/openai", model: groqModel, apiKey }, imageBase64, prompt);
+            } else if (provider === "LOCAL_OLLAMA") {
+              // Ollama local — sem chave de API. Endpoint /api/chat (não /v1/chat/completions).
+              const ollamaConfig = getProviderConfig("LOCAL_OLLAMA");
+              console.log(`[AI] Enviando para Ollama local (${ollamaConfig.model})...`);
+              aiResponse = await fetch(`${ollamaConfig.baseUrl}/api/chat`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  model: ollamaConfig.model,
+                  messages: [{ role: "user", content: prompt }],
+                  images: [imageBase64],
+                  stream: false,
+                  options: { temperature: 0.1 }
+                }),
+              });
+            } else if (provider === "OLLAMA_CLOUD") {
+              if (!apiKey) throw new Error("Token Ollama Cloud não configurado. Obtenha em https://ollama.com/signup.");
+              const ollamaCloudModel = getProviderConfig("OLLAMA_CLOUD").model;
+              console.log(`[AI] Enviando para Ollama Cloud (${ollamaCloudModel})...`);
+              aiResponse = await callOpenAICompatible({ baseUrl: "https://chat.api.ollama.ai", model: ollamaCloudModel, apiKey }, imageBase64, prompt);
+            } else if (provider === "CODEX") {
+              if (!apiKey) throw new Error("Login Codex necessário. Use o botão de login no app para autenticar.");
+              const codexModel = getProviderConfig("CODEX").model;
+              console.log(`[AI] Enviando para Codex (${codexModel})...`);
+              aiResponse = await callOpenAICompatible({ baseUrl: "https://api.codex.ai", model: codexModel, apiKey }, imageBase64, prompt);
+            } else {
+              // NVIDIA (padrão)
+              const nvidiaModel = getProviderConfig("NVIDIA").model;
+              console.log(`[AI] Enviando para NVIDIA (${nvidiaModel})...`);
+              aiResponse = await callOpenAICompatible({ baseUrl: "https://integrate.api.nvidia.com", model: nvidiaModel, apiKey }, imageBase64, prompt);
+            }
 } catch (aiErr) {
           await logError("Falha ao chamar o provedor de IA", aiErr);
           throw aiErr;
@@ -380,11 +411,14 @@ ${correction ? `OBSERVAÇÃO DO USUÁRIO: ${correction}. Reavalie o documento co
        if (provider === "GOOGLE") {
          const candidates = data.candidates?.[0]?.content?.parts;
          responseText = candidates?.map((p: any) => p.text).filter(Boolean).join("") || "";
-       } else if (provider === "ANTHROPIC") {
-         responseText = data.content?.[0]?.text || "";
-       } else {
-         responseText = data.choices?.[0]?.message?.content || "";
-       }
+        } else if (provider === "ANTHROPIC") {
+          responseText = data.content?.[0]?.text || "";
+        } else if (provider === "LOCAL_OLLAMA") {
+          // Ollama /api/chat retorna { message: { content: "..." } }
+          responseText = data.message?.content || data.response || "";
+        } else {
+          responseText = data.choices?.[0]?.message?.content || "";
+        }
 
         console.log("[AI OCR] Resposta recebida:", responseText?.substring(0, 200));
 

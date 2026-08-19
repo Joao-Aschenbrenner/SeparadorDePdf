@@ -24,7 +24,12 @@ import {
   FileDown,
   FileCode,
   Settings,
-  Cog
+  Cog,
+  Cpu,
+  HardDrive,
+  Zap,
+  LogIn,
+  Cloud
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -45,6 +50,15 @@ declare global {
       confirmDownload: () => void;
       restartApp: () => void;
       checkForUpdate: () => void;
+      // Ollama local
+      getHardware: () => Promise<{ totalMemGB: number; cpuCores: number; gpu: string; hasGpu: boolean; suggestedModel: string; reason: string }>;
+      checkInstalled: () => Promise<{ installed: boolean; path: string | null }>;
+      install: () => Promise<{ ok: boolean; error?: string; path?: string }>;
+      pullModel: (model: string) => Promise<{ ok: boolean; model?: string; error?: string }>;
+      onPullProgress: (fn: (p: { line: string; model: string }) => void) => () => void;
+      // Codex OAuth
+      codexLogin: () => Promise<{ ok: boolean; message?: string; error?: string }>;
+      codexLogout: () => Promise<{ ok: boolean; error?: string }>;
     };
   }
 }
@@ -57,6 +71,167 @@ const MAX_CONCURRENT_REQUESTS = 10;
 let pageIdCounter = 0;
 function nextPageId(): string {
   return `p${pageIdCounter++}`;
+}
+
+// ════════════════════════════════════════════════════════════
+// Ollama Local Setup — detecta hardware, instala Ollama, baixa modelo
+// ════════════════════════════════════════════════════════════
+function OllamaLocalSetup() {
+  const [hw, setHw] = useState<{ totalMemGB: number; cpuCores: number; gpu: string; hasGpu: boolean; suggestedModel: string; reason: string } | null>(null);
+  const [installState, setInstallState] = useState<"idle" | "checking" | "downloading" | "installing" | "pulling" | "done" | "error">("idle");
+  const [progress, setProgress] = useState<string>("");
+  const [errorMsg, setErrorMsg] = useState("");
+  const api = window.electronAPI;
+
+  useEffect(() => {
+    if (api?.getHardware) {
+      api.getHardware().then(setHw).catch(() => {});
+    }
+    if (api?.onPullProgress) {
+      const clean = api.onPullProgress((p: { line: string; model: string }) => {
+        setProgress(p.line);
+      });
+      return clean;
+    }
+  }, []);
+
+  const handleSetup = async () => {
+    if (!api) { setErrorMsg("Electron API não disponível."); return; }
+    setErrorMsg("");
+    try {
+      setInstallState("checking");
+      const check = await api.checkInstalled();
+      if (!check.installed) {
+        setInstallState("downloading");
+        setProgress("Baixando instalador do Ollama...");
+        const inst = await api.install();
+        if (!inst.ok) { setErrorMsg(inst.error || "Falha ao instalar"); setInstallState("error"); return; }
+      }
+      setInstallState("pulling");
+      const model = hw?.suggestedModel || "llama3.2-vision:11b";
+      setProgress(`Baixando modelo ${model}...`);
+      const pull = await api.pullModel(model);
+      if (!pull.ok) { setErrorMsg(pull.error || "Falha ao baixar modelo"); setInstallState("error"); return; }
+      setInstallState("done");
+      setProgress(`Modelo ${model} pronto! Salve as configurações.`);
+    } catch (e: any) {
+      setErrorMsg(e.message || "Erro inesperado");
+      setInstallState("error");
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      {hw && (
+        <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800">
+          <div className="flex items-center gap-2 mb-2">
+            <Cpu className="w-4 h-4 text-cyan-400" />
+            <span className="text-xs font-bold text-slate-200">Hardware detectado</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-400">
+            <div className="flex items-center gap-1.5"><HardDrive className="w-3 h-3" /> RAM: <strong className="text-slate-200">{hw.totalMemGB} GB</strong></div>
+            <div className="flex items-center gap-1.5"><Cpu className="w-3 h-3" /> Cores: <strong className="text-slate-200">{hw.cpuCores}</strong></div>
+            <div className="flex items-center gap-1.5 col-span-2"><Zap className="w-3 h-3" /> GPU: <strong className="text-slate-200">{hw.gpu}</strong></div>
+          </div>
+          <p className="text-[11px] text-cyan-300 mt-2">{hw.reason}</p>
+        </div>
+      )}
+
+      <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-xs font-bold text-slate-200">Modelo sugerido</span>
+        </div>
+        <code className="text-[12px] text-emerald-300 font-mono">{hw?.suggestedModel || "llama3.2-vision:11b"}</code>
+        <p className="text-[11px] text-slate-500 mt-1">
+          Funciona 100% offline. Primeiro uso baixa o Ollama + modelo (~5-8 GB).
+          Depois, processa sem internet e sem custo de API.
+        </p>
+      </div>
+
+      {installState !== "idle" && installState !== "done" && progress && (
+        <div className="p-2 bg-slate-950 rounded-xl border border-slate-800 text-[11px] text-slate-400 font-mono break-all max-h-24 overflow-y-auto">
+          {progress}
+        </div>
+      )}
+      {errorMsg && <p className="text-[11px] text-rose-400">{errorMsg}</p>}
+      {installState === "done" && (
+        <p className="text-[11px] text-emerald-400 flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5" /> Pronto! Clique em Salvar.</p>
+      )}
+
+      <button
+        onClick={handleSetup}
+        disabled={installState === "downloading" || installState === "installing" || installState === "pulling"}
+        className="w-full px-4 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+      >
+        {(installState === "downloading" || installState === "installing" || installState === "pulling") ? (
+          <><Loader2 className="w-4 h-4 animate-spin" /> {installState === "downloading" ? "Baixando Ollama..." : installState === "pulling" ? "Baixando modelo..." : "Instalando..."}</>
+        ) : (
+          <><Download className="w-4 h-4" /> Baixar e instalar Ollama + modelo</>
+        )}
+      </button>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+// Codex Login — OAuth flow + token manual
+// ════════════════════════════════════════════════════════════
+function CodexLogin({ apiKey, setApiKey }: { apiKey: string; setApiKey: (v: string) => void }) {
+  const [logging, setLogging] = useState(false);
+  const api = window.electronAPI;
+
+  const handleLogin = async () => {
+    if (!api?.codexLogin) return;
+    setLogging(true);
+    try {
+      const r = await api.codexLogin();
+      if (!r.ok) alert(r.error || "Falha no login Codex");
+      else if (r.message) alert(r.message);
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setLogging(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800">
+        <div className="flex items-center gap-2 mb-1.5">
+          <LogIn className="w-4 h-4 text-indigo-400" />
+          <span className="text-xs font-bold text-slate-200">Codex Pro</span>
+          <Cloud className="w-3.5 h-3.5 text-slate-500" />
+        </div>
+        <p className="text-[11px] text-slate-400 leading-relaxed">
+          Use o limite elevado do Codex Pro. Clique em "Fazer login" para autenticar via OAuth.
+          Após autenticar, cole o token da API no campo abaixo.
+        </p>
+      </div>
+
+      <button
+        onClick={handleLogin}
+        disabled={logging}
+        className="w-full px-4 py-2.5 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+      >
+        {logging ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
+        Fazer login no Codex
+      </button>
+
+      <div>
+        <label className="block text-xs font-semibold text-slate-300 mb-1.5">Token da API Codex</label>
+        <input
+          type="password"
+          value={apiKey}
+          onChange={e => setApiKey(e.target.value)}
+          placeholder="Cole o token do Codex aqui"
+          className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+        />
+        <p className="text-[11px] text-slate-500 mt-1.5">
+          {apiKey ? "Token salvo em ~/.ai-disec-pdf/settings.json" : "Obtenha o token após o login OAuth."}
+        </p>
+      </div>
+    </div>
+  );
 }
 
 export default function App() {
@@ -1267,7 +1442,7 @@ export default function App() {
       {/* Visual Footer */}
       <footer className="py-8 bg-slate-900/20 border-t border-slate-900 text-center mt-12 px-4.5">
         <p className="text-xs text-slate-500 font-medium">
-          AI Disec PDF v{appVersion} • 8 provedores de IA • 100% processamento local.
+          AI Disec PDF v{appVersion} • 10 provedores de IA • 100% processamento local.
         </p>
       </footer>
 
@@ -1300,15 +1475,18 @@ export default function App() {
               </section>
               <section>
                 <h4 className="font-bold text-white text-base mb-2">Provedores de IA</h4>
-                <p>São 8 provedores disponíveis. Escolha em Configurações (ícone de engrenagem):</p>
+                <p>São 10 provedores disponíveis. Escolha em Configurações (ícone de engrenagem):</p>
                 <ul className="list-disc list-inside space-y-1 text-slate-400 mt-1">
-                  <li><strong className="text-slate-200">NVIDIA Llama Vision</strong> — Modelo Meta Llama 90B</li>
-                  <li><strong className="text-slate-200">Google Gemini Flash</strong> — Rápido, suporta imagens</li>
+                  <li><strong className="text-slate-200">NVIDIA Llama 3.2 Vision</strong> — Modelo 90B</li>
+                  <li><strong className="text-slate-200">Google Gemini 2.5 Flash</strong> — Rápido, suporta imagens</li>
                   <li><strong className="text-slate-200">OpenAI GPT-4o</strong> — Modelo multimodal da OpenAI</li>
-                  <li><strong className="text-slate-200">Anthropic Claude</strong> — Claude 3 Sonnet</li>
-                  <li><strong className="text-slate-200">Mistral Vision</strong> — Mistral multimodal</li>
+                  <li><strong className="text-slate-200">Anthropic Claude Sonnet 4</strong> — Multimodal</li>
+                  <li><strong className="text-slate-200">Mistral Pixtral 12B</strong> — Multimodal</li>
                   <li><strong className="text-slate-200">OpenRouter</strong> — Acesso a 200+ modelos</li>
                   <li><strong className="text-slate-200">Groq</strong> — Inferência ultrarrápida</li>
+                  <li><strong className="text-slate-200">Ollama Cloud</strong> — Llama Vision via Ollama</li>
+                  <li><strong className="text-slate-200">Codex Pro</strong> — Limite elevado via login OAuth</li>
+                  <li><strong className="text-slate-200">Ollama Local</strong> — 100% offline, download automático</li>
                 </ul>
               </section>
               <section>
@@ -1368,52 +1546,69 @@ export default function App() {
                   onChange={e => setSettingsProvider(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 cursor-pointer"
                 >
-                  <option value="NVIDIA">NVIDIA (Llama Vision)</option>
-                  <option value="GOOGLE">Google Gemini Flash 2.0</option>
-                  <option value="OPENAI">OpenAI (GPT-4o)</option>
-                  <option value="ANTHROPIC">Anthropic (Claude 3 Sonnet)</option>
-                  <option value="MISTRAL">Mistral (Mistral Vision)</option>
-                  <option value="OPENROUTER">OpenRouter (Gemini Flash via API)</option>
-                  <option value="GROQ">Groq (Llama Vision)</option>
+                  <optgroup label="Modelos na Nuvem (API Key)">
+                    <option value="NVIDIA">NVIDIA (Llama 3.2 90B Vision)</option>
+                    <option value="GOOGLE">Google Gemini Flash 2.5</option>
+                    <option value="OPENAI">OpenAI (GPT-4o)</option>
+                    <option value="ANTHROPIC">Anthropic (Claude Sonnet 4)</option>
+                    <option value="MISTRAL">Mistral (Pixtral 12B)</option>
+                    <option value="OPENROUTER">OpenRouter (Gemini Flash via API)</option>
+                    <option value="GROQ">Groq (Llama Vision)</option>
+                    <option value="OLLAMA_CLOUD">Ollama Cloud (token ollama.com)</option>
+                    <option value="CODEX">Codex Pro (login OAuth)</option>
+                  </optgroup>
+                  <optgroup label="Modelo Local (offline, sem chave)">
+                    <option value="LOCAL_OLLAMA">Ollama Local (offline, download automático)</option>
+                  </optgroup>
                 </select>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Chave de API</label>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <input
-                      type={showApiKey ? "text" : "password"}
-                      value={settingsApiKey}
-                      onChange={e => setSettingsApiKey(e.target.value)}
-                      placeholder={settingsApiKey ? "Chave salva. Digite para trocar." : "Cole sua chave aqui"}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 pr-10"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowApiKey(!showApiKey)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-slate-300 cursor-pointer"
-                      tabIndex={-1}
-                    >
-                      {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
+              {settingsProvider === "LOCAL_OLLAMA" ? (
+                <OllamaLocalSetup />
+              ) : settingsProvider === "CODEX" ? (
+                <CodexLogin apiKey={settingsApiKey} setApiKey={setSettingsApiKey} />
+              ) : (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    {settingsProvider === "OLLAMA_CLOUD" ? "Token Ollama Cloud" : "Chave de API"}
+                  </label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        type={showApiKey ? "text" : "password"}
+                        value={settingsApiKey}
+                        onChange={e => setSettingsApiKey(e.target.value)}
+                        placeholder={settingsApiKey ? "Chave salva. Digite para trocar." : "Cole sua chave aqui"}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowApiKey(!showApiKey)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-slate-300 cursor-pointer"
+                        tabIndex={-1}
+                      >
+                        {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    {settingsApiKey && (
+                      <button
+                        onClick={() => setSettingsApiKey("")}
+                        className="px-3 py-2.5 text-xs font-bold text-rose-400 bg-rose-950/30 border border-rose-900/30 hover:bg-rose-950/50 rounded-xl transition-all cursor-pointer shrink-0"
+                        title="Remover chave"
+                      >
+                        Remover
+                      </button>
+                    )}
                   </div>
-                  {settingsApiKey && (
-                    <button
-                      onClick={() => setSettingsApiKey("")}
-                      className="px-3 py-2.5 text-xs font-bold text-rose-400 bg-rose-950/30 border border-rose-900/30 hover:bg-rose-950/50 rounded-xl transition-all cursor-pointer shrink-0"
-                      title="Remover chave"
-                    >
-                      Remover
-                    </button>
-                  )}
+                  <p className="text-[11px] text-slate-500 mt-1.5">
+                    {settingsProvider === "OLLAMA_CLOUD"
+                      ? "Obtenha o token em ollama.com/signup"
+                      : settingsApiKey
+                        ? "Chave salva em ~/.ai-disec-pdf/settings.json"
+                        : "Sua chave fica salva localmente no disco."}
+                  </p>
                 </div>
-                <p className="text-[11px] text-slate-500 mt-1.5">
-                  {settingsApiKey
-                    ? "Chave salva em ~/.ai-disec-pdf/settings.json"
-                    : "Sua chave fica salva localmente no disco."}
-                </p>
-              </div>
+              )}
             </div>
 
             <div className="flex gap-3 mt-6">

@@ -67,6 +67,7 @@ describe("Mock dos provedores de IA (catálogo externalizado)", () => {
   const providers = [
     "GOOGLE", "NVIDIA", "OPENAI", "ANTHROPIC",
     "MISTRAL", "OPENROUTER", "GROQ",
+    "LOCAL_OLLAMA", "OLLAMA_CLOUD", "CODEX",
   ] as const;
 
   function mockResponseForProvider(provider: string) {
@@ -76,6 +77,10 @@ describe("Mock dos provedores de IA (catálogo externalizado)", () => {
     }
     if (provider === "ANTHROPIC") {
       return { content: [{ text: json }] };
+    }
+    if (provider === "LOCAL_OLLAMA") {
+      // Ollama /api/chat retorna { message: { content: "..." } }
+      return { message: { content: json } };
     }
     return { choices: [{ message: { content: json } }] };
   }
@@ -110,6 +115,7 @@ describe("Mock dos provedores de IA (catálogo externalizado)", () => {
     vi.spyOn(globalThis as any, "fetch").mockImplementation(
       (url: string | URL, init?: any) => {
         const urlStr = url.toString();
+        // Só deixa passar o fetch para o servidor de teste (porta PORT). Mocka todo o resto (providers + Ollama local).
         if (urlStr.includes(`localhost:${PORT}`) || urlStr.includes(`127.0.0.1:${PORT}`)) {
           return originalFetch(url, init);
         }

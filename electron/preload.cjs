@@ -37,4 +37,19 @@ contextBridge.exposeInMainWorld("electronAPI", {
   confirmDownload: () => ipcRenderer.send("confirm-update"),
   restartApp: () => ipcRenderer.send("restart-app"),
   checkForUpdate: () => ipcRenderer.send("check-for-update"),
+
+  // Ollama local: detectar hardware, instalar, baixar modelo, status
+  getHardware: () => ipcRenderer.invoke("ollama:get-hardware"),
+  checkInstalled: () => ipcRenderer.invoke("ollama:check-installed"),
+  install: () => ipcRenderer.invoke("ollama:install"),
+  pullModel: (model) => ipcRenderer.invoke("ollama:pull-model", model),
+  onPullProgress: (fn) => {
+    const cb = (_e, progress) => fn(progress);
+    ipcRenderer.on("ollama:pull-progress", cb);
+    return () => ipcRenderer.removeListener("ollama:pull-progress", cb);
+  },
+
+  // Codex OAuth login
+  codexLogin: () => ipcRenderer.invoke("codex:login"),
+  codexLogout: () => ipcRenderer.invoke("codex:logout"),
 });

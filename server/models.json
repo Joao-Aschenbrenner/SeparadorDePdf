@@ -4,10 +4,10 @@
   "providers": {
     "NVIDIA": {
       "baseUrl": "https://integrate.api.nvidia.com",
-      "models": ["meta/llama-4-scout-17b-16e-instruct"],
+      "models": ["meta/llama-3.2-90b-vision-instruct", "meta/llama-3.2-11b-vision-instruct", "nvidia/llama-3.1-nemotron-nano-vl-8b-v1", "nvidia/nemotron-nano-12b-v2-vl", "microsoft/phi-3-vision-128k-instruct"],
       "modelsEndpoint": "/v1/models",
-      "visionKeywords": ["vision", "vl", "image", "multimodal", "scout", "nemotron-vision", "pixtral"],
-      "preferred": ["meta/llama-4-scout-17b-16e-instruct", "meta/llama-3.2-90b-vision-instruct"]
+      "visionKeywords": ["vision", "vl", "image", "multimodal", "scout", "nemotron-vision", "nemotron-nano", "phi-3-vision", "llama-3.2"],
+      "preferred": ["meta/llama-3.2-90b-vision-instruct", "nvidia/nemotron-nano-12b-v2-vl", "meta/llama-3.2-11b-vision-instruct"]
     },
     "GOOGLE": {
       "baseUrl": "https://generativelanguage.googleapis.com",
@@ -50,6 +50,33 @@
       "modelsEndpoint": "/v1/models",
       "visionKeywords": ["vision", "vl", "scout", "llama-4"],
       "preferred": ["meta-llama/llama-4-scout-17b-16e-instruct", "llama-3.2-90b-vision-preview"]
+    },
+    "LOCAL_OLLAMA": {
+      "_comment": "Modelo local rodando via Ollama (http://localhost:11434). Sem chave de API. Modelo baixado automaticamente.",
+      "baseUrl": "http://localhost:11434",
+      "models": ["llama3.2-vision:11b", "llama3.2-vision:90b", "moondream:1.8b"],
+      "modelsEndpoint": "/api/tags",
+      "visionKeywords": ["vision", "vl", "moondream", "llama"],
+      "preferred": ["llama3.2-vision:11b"],
+      "local": true,
+      "downloadSizes": { "llama3.2-vision:11b": "7.8GB", "llama3.2-vision:90b": "55GB", "moondream:1.8b": "1.3GB" },
+      "minRamGB": { "llama3.2-vision:11b": 8, "llama3.2-vision:90b": 32, "moondream:1.8b": 4 }
+    },
+    "OLLAMA_CLOUD": {
+      "_comment": "Ollama Cloud (chat.api.ollama.ai) — requer token em https://ollama.com/signup. Mesma API OpenAI-compat.",
+      "baseUrl": "https://chat.api.ollama.ai",
+      "models": ["llama3.2-vision:11b", "llama3.2-vision:90b"],
+      "modelsEndpoint": "/v1/models",
+      "visionKeywords": ["vision", "vl", "llama"],
+      "preferred": ["llama3.2-vision:11b"]
+    },
+    "CODEX": {
+      "_comment": "Codex Pro — login OAuth no app. API compatível OpenAI. Limite elevado para assinantes Codex Pro.",
+      "baseUrl": "https://api.codex.ai",
+      "models": ["gpt-4o", "gpt-4o-mini", "o4-mini"],
+      "modelsEndpoint": "/v1/models",
+      "visionKeywords": ["gpt-4o", "vision", "o4"],
+      "preferred": ["gpt-4o", "gpt-4o-mini"]
     }
   }
 }
