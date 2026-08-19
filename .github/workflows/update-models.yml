@@ -1,0 +1,76 @@
+name: Update AI Models Monthly
+
+# Atualiza server/models.json 1x por mes consultando /v1/models de cada provider
+# e abre um PR automaticamente com as mudancas. Roda tambem manualmente via workflow_dispatch.
+on:
+  schedule:
+    # Dia 1 de cada mes as 09:00 UTC
+    - cron: "0 9 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-models:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Update models catalog
+        env:
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: node scripts/update-models.cjs
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet server/models.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No changes in models.json."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "models.json has changes."
+          fi
+
+      - name: Create Pull Request
+        if: steps.changes.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore(models): atualização mensal automática do catálogo de modelos IA"
+          title: "chore(models): atualização mensal do catálogo de modelos IA"
+          body: |
+            ## Atualização mensal automática de modelos
+
+            Este PR foi gerado pelo workflow `update-models.yml` (cron mensal).
+
+            O script `scripts/update-models.cjs` consultou os endpoints `/v1/models`
+            de cada provider e atualizou `server/models.json` com os modelos de visão
+            disponíveis. Providers sem chave configurada nos secrets do repositório
+            mantêm os modelos anteriores.
+
+            ### Próximos passos
+            - Revise os modelos novos em `server/models.json`
+            - Se aprovado, faça merge. O próximo release do app empacotará o catálogo novo
+            - Para providers sem secret configurado, adicione a chave em
+              Settings → Secrets and variables → Actions para habilitar a atualização
+          branch: chore/update-models
+          branch-suffix: timestamp
+          labels: |
+            automated
+            models
+            chore

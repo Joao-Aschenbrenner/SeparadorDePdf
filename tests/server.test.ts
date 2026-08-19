@@ -58,7 +58,7 @@ describe("Servidor de Extração (API)", () => {
   });
 });
 
-describe("Mock dos 8 provedores de IA", () => {
+describe("Mock dos provedores de IA (catálogo externalizado)", () => {
   const PORT = 3003;
   const BASE_URL = `http://localhost:${PORT}`;
   let testPdfBase64: string;
@@ -66,7 +66,7 @@ describe("Mock dos 8 provedores de IA", () => {
 
   const providers = [
     "GOOGLE", "NVIDIA", "OPENAI", "ANTHROPIC",
-    "MISTRAL", "OPENROUTER", "GROQ", "CEREBRAS",
+    "MISTRAL", "OPENROUTER", "GROQ",
   ] as const;
 
   function mockResponseForProvider(provider: string) {
@@ -127,14 +127,8 @@ describe("Mock dos 8 provedores de IA", () => {
       body: JSON.stringify({ pdfBase64: testPdfBase64, originalName: "test.pdf", pageIndex: 0 }),
     });
 
-    if (provider === "CEREBRAS") {
-      expect(response.status).toBe(400);
-      const data = await response.json();
-      expect(data.error).toContain("não suporta análise de imagens");
-    } else {
-      expect(response.status).toBe(200);
-      const data = await response.json();
-      expect(data.companyName).toBe("Mock");
-    }
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.companyName).toBe("Mock");
   });
 });

@@ -10,7 +10,80 @@ const DEFAULT_PORT = 3001;
 const DATA_DIR = path.join(os.homedir(), ".ai-disec-pdf");
 const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
 
-const NVIDIA_MODEL = "meta/llama-3.2-90b-vision-instruct";
+// Catálogo de modelos: lê server/models.json (atualizado mensalmente via CI).
+// Fallback hardcoded caso o arquivo não exista ou esteja corrompido.
+const FALLBACK_MODELS: Record<string, { baseUrl: string; model: string }> = {
+  NVIDIA: { baseUrl: "https://integrate.api.nvidia.com", model: "meta/llama-4-scout-17b-16e-instruct" },
+  GOOGLE: { baseUrl: "https://generativelanguage.googleapis.com", model: "gemini-2.5-flash" },
+  OPENAI: { baseUrl: "https://api.openai.com", model: "gpt-4o" },
+  ANTHROPIC: { baseUrl: "https://api.anthropic.com", model: "claude-sonnet-4-20250514" },
+  MISTRAL: { baseUrl: "https://api.mistral.ai", model: "pixtral-12b-2409" },
+  OPENROUTER: { baseUrl: "https://openrouter.ai/api", model: "google/gemini-2.5-flash" },
+  GROQ: { baseUrl: "https://api.groq.com/openai", model: "meta-llama/llama-4-scout-17b-16e-instruct" },
+};
+
+interface ModelsCatalog {
+  _updated?: string;
+  providers: Record<string, {
+    baseUrl: string;
+    models: string[];
+    modelsEndpoint?: string;
+    visionKeywords?: string[];
+    preferred?: string[];
+  }>;
+}
+
+let cachedCatalog: ModelsCatalog | null = null;
+
+function loadModelsCatalog(): ModelsCatalog {
+  if (cachedCatalog) return cachedCatalog;
+  // Resolve models.json em múltiplos caminhos candidatos (dev tsx, bundle dist/, Electron asar)
+  const candidates = [
+    path.join(__dirname, "models.json"),
+    path.join(__dirname, "..", "server", "models.json"),
+    path.join(process.cwd(), "server", "models.json"),
+    path.join(process.cwd(), "models.json"),
+  ];
+  for (const catalogPath of candidates) {
+    try {
+      if (fs.existsSync(catalogPath)) {
+        const raw = fs.readFileSync(catalogPath, "utf8");
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.providers && typeof parsed.providers === "object") {
+          cachedCatalog = parsed;
+          console.log(`[models] Catálogo carregado de ${catalogPath}`);
+          return parsed;
+        }
+      }
+    } catch (e) {
+      // tenta próximo candidato
+    }
+  }
+  console.warn("[models] models.json não encontrado em nenhum candidato, usando fallback hardcoded.");
+  const fallback: ModelsCatalog = {
+    providers: Object.fromEntries(
+      Object.entries(FALLBACK_MODELS).map(([k, v]) => [k, { baseUrl: v.baseUrl, models: [v.model], preferred: [v.model] }])
+    ),
+  };
+  cachedCatalog = fallback;
+  return fallback;
+}
+
+function getProviderConfig(provider: string): { baseUrl: string; model: string } {
+  const catalog = loadModelsCatalog();
+  const entry = catalog.providers[provider];
+  if (entry && entry.models && entry.models.length > 0) {
+    const preferred = entry.preferred && entry.preferred.length > 0 ? entry.preferred[0] : entry.models[0];
+    const chosen = entry.models.includes(preferred) ? preferred : entry.models[0];
+    return { baseUrl: entry.baseUrl, model: chosen };
+  }
+  const fb = FALLBACK_MODELS[provider];
+  if (fb) return fb;
+  return FALLBACK_MODELS.NVIDIA;
+}
+
+export { loadModelsCatalog, getProviderConfig, FALLBACK_MODELS };
+
 let serverInstance: any = null;
 
 function ensureDataDir() {
@@ -219,70 +292,77 @@ ${correction ? `OBSERVAÇÃO DO USUÁRIO: ${correction}. Reavalie o documento co
            });
          };
 
-         if (provider === "GOOGLE") {
-           if (!apiKey) throw new Error("Chave de API Google não configurada.");
-           const googleUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-           console.log("[AI] Enviando para Google Gemini...");
-           aiResponse = await fetch(googleUrl, {
+          if (provider === "GOOGLE") {
+            if (!apiKey) throw new Error("Chave de API Google não configurada.");
+            const googleModel = getProviderConfig("GOOGLE").model;
+            const googleUrl = `https://generativelanguage.googleapis.com/v1beta/models/${googleModel}:generateContent?key=${apiKey}`;
+            console.log(`[AI] Enviando para Google Gemini (${googleModel})...`);
+            aiResponse = await fetch(googleUrl, {
              method: "POST",
              headers: { "Content-Type": "application/json" },
              body: JSON.stringify({
                contents: [{ role: "user", parts: [{ inlineData: { mimeType: "image/jpeg", data: imageBase64 } }, { text: prompt }] }]
              })
            });
-         } else if (provider === "OPENAI") {
-           if (!apiKey) throw new Error("Chave de API OpenAI não configurada.");
-           console.log("[AI] Enviando para OpenAI GPT-4o...");
-           aiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-             method: "POST",
-             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-             body: JSON.stringify({
-               model: "gpt-4o",
+          } else if (provider === "OPENAI") {
+            if (!apiKey) throw new Error("Chave de API OpenAI não configurada.");
+            const openaiModel = getProviderConfig("OPENAI").model;
+            console.log(`[AI] Enviando para OpenAI (${openaiModel})...`);
+            aiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+              body: JSON.stringify({
+                model: openaiModel,
                messages: [{ role: "user", content: [{ type: "image_url", image_url: { url: `data:image/jpeg;base64,${imageBase64}`, detail: "high" } }, { type: "text", text: prompt }] }],
                temperature: 0.1,
                max_tokens: 1024,
                top_p: 0.9
              })
            });
-         } else if (provider === "ANTHROPIC") {
-           if (!apiKey) throw new Error("Chave de API Anthropic não configurada.");
-           console.log("[AI] Enviando para Anthropic Claude...");
-           aiResponse = await fetch("https://api.anthropic.com/v1/messages", {
-             method: "POST",
-             headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-             body: JSON.stringify({
-               model: "claude-3-sonnet-20240229",
+          } else if (provider === "ANTHROPIC") {
+            if (!apiKey) throw new Error("Chave de API Anthropic não configurada.");
+            const anthropicModel = getProviderConfig("ANTHROPIC").model;
+            console.log(`[AI] Enviando para Anthropic Claude (${anthropicModel})...`);
+            aiResponse = await fetch("https://api.anthropic.com/v1/messages", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+              body: JSON.stringify({
+                model: anthropicModel,
                max_tokens: 1024,
                messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: "image/jpeg", data: imageBase64 } }, { type: "text", text: prompt }] }]
              })
            });
-         } else if (provider === "MISTRAL") {
-           if (!apiKey) throw new Error("Chave de API Mistral não configurada.");
-           console.log("[AI] Enviando para Mistral...");
-           aiResponse = await fetch("https://api.mistral.ai/v1/chat/completions", {
-             method: "POST",
-             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-             body: JSON.stringify({
-               model: "open-mistral-vision",
+          } else if (provider === "MISTRAL") {
+            if (!apiKey) throw new Error("Chave de API Mistral não configurada.");
+            const mistralModel = getProviderConfig("MISTRAL").model;
+            console.log(`[AI] Enviando para Mistral (${mistralModel})...`);
+            aiResponse = await fetch("https://api.mistral.ai/v1/chat/completions", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+              body: JSON.stringify({
+                model: mistralModel,
                messages: [{ role: "user", content: [{ type: "image_url", image_url: { url: `data:image/jpeg;base64,${imageBase64}`, detail: "high" } }, { type: "text", text: prompt }] }],
                temperature: 0.1,
                max_tokens: 1024,
                top_p: 0.9
              })
            });
-          } else if (provider === "OPENROUTER") {
-            if (!apiKey) throw new Error("Chave de API OpenRouter não configurada.");
-            console.log("[AI] Enviando para OpenRouter...");
-            aiResponse = await callOpenAICompatible({ baseUrl: "https://openrouter.ai/api", model: "google/gemini-2.0-flash-001", apiKey }, imageBase64, prompt);
-          } else if (provider === "GROQ") {
-            if (!apiKey) throw new Error("Chave de API Groq não configurada.");
-            console.log("[AI] Enviando para Groq...");
-            aiResponse = await callOpenAICompatible({ baseUrl: "https://api.groq.com/openai", model: "llama-3.2-90b-vision-preview", apiKey }, imageBase64, prompt);
-          } else {
-            // NVIDIA (padrão)
-            console.log("[AI] Enviando para NVIDIA...");
-            aiResponse = await callOpenAICompatible({ baseUrl: "https://integrate.api.nvidia.com", model: NVIDIA_MODEL, apiKey }, imageBase64, prompt);
-          }
+           } else if (provider === "OPENROUTER") {
+             if (!apiKey) throw new Error("Chave de API OpenRouter não configurada.");
+             const openrouterModel = getProviderConfig("OPENROUTER").model;
+             console.log(`[AI] Enviando para OpenRouter (${openrouterModel})...`);
+             aiResponse = await callOpenAICompatible({ baseUrl: "https://openrouter.ai/api", model: openrouterModel, apiKey }, imageBase64, prompt);
+           } else if (provider === "GROQ") {
+             if (!apiKey) throw new Error("Chave de API Groq não configurada.");
+             const groqModel = getProviderConfig("GROQ").model;
+             console.log(`[AI] Enviando para Groq (${groqModel})...`);
+             aiResponse = await callOpenAICompatible({ baseUrl: "https://api.groq.com/openai", model: groqModel, apiKey }, imageBase64, prompt);
+           } else {
+             // NVIDIA (padrão)
+             const nvidiaModel = getProviderConfig("NVIDIA").model;
+             console.log(`[AI] Enviando para NVIDIA (${nvidiaModel})...`);
+             aiResponse = await callOpenAICompatible({ baseUrl: "https://integrate.api.nvidia.com", model: nvidiaModel, apiKey }, imageBase64, prompt);
+           }
 } catch (aiErr) {
           await logError("Falha ao chamar o provedor de IA", aiErr);
           throw aiErr;
