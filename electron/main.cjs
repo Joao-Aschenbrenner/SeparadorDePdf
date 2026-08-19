@@ -200,10 +200,9 @@ ipcMain.handle("codex:login", async (event) => {
       parent: mainWindow, modal: true,
       webPreferences: { contextIsolation: true, nodeIntegration: false },
     });
-    // TODO: substituir pela URL de OAuth do Codex quando documentada publicamente.
-    // Por enquanto abre a página de login do Codex.
-    await authWin.loadURL("https://platform.openai.com/login");
-    return { ok: true, message: "Janela de login aberta. Após autenticar, copie o token da API e cole nas Configurações." };
+    // Codex Pro = OpenAI API key. Abre a página de API keys da OpenAI.
+    await authWin.loadURL("https://platform.openai.com/api-keys");
+    return { ok: true, message: "Página de API keys da OpenAI aberta. Copie sua chave (sk-...) e cole nas Configurações." };
   } catch (e) {
     return { ok: false, error: e.message };
   }

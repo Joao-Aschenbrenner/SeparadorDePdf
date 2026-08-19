@@ -4,10 +4,10 @@
   "providers": {
     "NVIDIA": {
       "baseUrl": "https://integrate.api.nvidia.com",
-      "models": ["meta/llama-3.2-11b-vision-instruct", "meta/llama-3.2-90b-vision-instruct", "nvidia/llama-3.1-nemotron-nano-vl-8b-v1", "nvidia/nemotron-nano-12b-v2-vl"],
+      "models": ["nvidia/llama-3.1-nemotron-nano-vl-8b-v1", "meta/llama-3.2-11b-vision-instruct", "meta/llama-3.2-90b-vision-instruct", "nvidia/nemotron-nano-12b-v2-vl"],
       "modelsEndpoint": "/v1/models",
       "visionKeywords": ["vision", "vl", "image", "multimodal", "scout", "nemotron-vision", "nemotron-nano", "phi-3-vision", "llama-3.2"],
-      "preferred": ["meta/llama-3.2-11b-vision-instruct"]
+      "preferred": ["nvidia/llama-3.1-nemotron-nano-vl-8b-v1"]
     },
     "GOOGLE": {
       "baseUrl": "https://generativelanguage.googleapis.com",
@@ -31,25 +31,30 @@
       "preferred": ["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022", "claude-3-sonnet-20240229"]
     },
     "MISTRAL": {
+      "_comment": "Mistral nao tem modelo de visao direta. Usa OCR (v1/ocr) + classificacao em 2 passos.",
       "baseUrl": "https://api.mistral.ai",
-      "models": ["pixtral-12b-2409"],
+      "models": ["mistral-ocr-latest"],
       "modelsEndpoint": "/v1/models",
-      "visionKeywords": ["pixtral", "vision"],
-      "preferred": ["pixtral-12b-2409", "pixtral-large-latest", "open-mistral-vision"]
+      "visionKeywords": ["ocr"],
+      "preferred": ["mistral-ocr-latest"],
+      "ocrOnly": true
     },
     "OPENROUTER": {
+      "_comment": "OpenRouter free models de visao. Sem custo.",
       "baseUrl": "https://openrouter.ai/api",
-      "models": ["google/gemini-2.5-flash", "google/gemini-2.0-flash-001"],
+      "models": ["nvidia/nemotron-nano-12b-v2-vl:free", "google/gemma-4-26b-a4b-it:free"],
       "modelsEndpoint": "/v1/models",
-      "visionKeywords": ["gemini", "vision", "vl", "pixtral", "llama-4"],
-      "preferred": ["google/gemini-2.5-flash", "google/gemini-2.0-flash-001"]
+      "visionKeywords": ["vision", "vl", "nemotron", "gemma"],
+      "preferred": ["nvidia/nemotron-nano-12b-v2-vl:free"]
     },
     "GROQ": {
+      "_comment": "Groq nao tem modelos de visao atualmente. Apenas texto/whisper.",
       "baseUrl": "https://api.groq.com/openai",
-      "models": ["meta-llama/llama-4-scout-17b-16e-instruct"],
+      "models": [],
       "modelsEndpoint": "/v1/models",
-      "visionKeywords": ["vision", "vl", "scout", "llama-4"],
-      "preferred": ["meta-llama/llama-4-scout-17b-16e-instruct", "llama-3.2-90b-vision-preview"]
+      "visionKeywords": [],
+      "preferred": [],
+      "noVision": true
     },
     "LOCAL_OLLAMA": {
       "_comment": "Modelo local rodando via Ollama (http://localhost:11434). Sem chave de API. Modelo baixado automaticamente.",
@@ -71,8 +76,8 @@
       "preferred": ["llama3.2-vision:11b"]
     },
     "CODEX": {
-      "_comment": "Codex Pro — login OAuth no app. API compatível OpenAI. Limite elevado para assinantes Codex Pro.",
-      "baseUrl": "https://api.codex.ai",
+      "_comment": "Codex Pro = plano ChatGPT Pro da OpenAI. Usa a mesma API da OpenAI com a chave do usuario. Login = colar API key de platform.openai.com.",
+      "baseUrl": "https://api.openai.com",
       "models": ["gpt-4o", "gpt-4o-mini", "o4-mini"],
       "modelsEndpoint": "/v1/models",
       "visionKeywords": ["gpt-4o", "vision", "o4"],

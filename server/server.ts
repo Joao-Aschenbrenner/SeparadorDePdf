@@ -13,16 +13,16 @@ const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
 // Catálogo de modelos: lê server/models.json (atualizado mensalmente via CI).
 // Fallback hardcoded caso o arquivo não exista ou esteja corrompido.
 const FALLBACK_MODELS: Record<string, { baseUrl: string; model: string }> = {
-  NVIDIA: { baseUrl: "https://integrate.api.nvidia.com", model: "meta/llama-3.2-11b-vision-instruct" },
+  NVIDIA: { baseUrl: "https://integrate.api.nvidia.com", model: "nvidia/llama-3.1-nemotron-nano-vl-8b-v1" },
   GOOGLE: { baseUrl: "https://generativelanguage.googleapis.com", model: "gemini-2.5-flash" },
   OPENAI: { baseUrl: "https://api.openai.com", model: "gpt-4o" },
   ANTHROPIC: { baseUrl: "https://api.anthropic.com", model: "claude-sonnet-4-20250514" },
-  MISTRAL: { baseUrl: "https://api.mistral.ai", model: "pixtral-12b-2409" },
-  OPENROUTER: { baseUrl: "https://openrouter.ai/api", model: "google/gemini-2.5-flash" },
-  GROQ: { baseUrl: "https://api.groq.com/openai", model: "meta-llama/llama-4-scout-17b-16e-instruct" },
+  MISTRAL: { baseUrl: "https://api.mistral.ai", model: "mistral-ocr-latest" },
+  OPENROUTER: { baseUrl: "https://openrouter.ai/api", model: "nvidia/nemotron-nano-12b-v2-vl:free" },
+  GROQ: { baseUrl: "https://api.groq.com/openai", model: "" },
   LOCAL_OLLAMA: { baseUrl: "http://localhost:11434", model: "llama3.2-vision:11b" },
   OLLAMA_CLOUD: { baseUrl: "https://chat.api.ollama.ai", model: "llama3.2-vision:11b" },
-  CODEX: { baseUrl: "https://api.codex.ai", model: "gpt-4o" },
+  CODEX: { baseUrl: "https://api.openai.com", model: "gpt-4o" },
 };
 
 interface ModelsCatalog {
@@ -36,6 +36,8 @@ interface ModelsCatalog {
     local?: boolean;
     downloadSizes?: Record<string, string>;
     minRamGB?: Record<string, number>;
+    noVision?: boolean;
+    ocrOnly?: boolean;
   }>;
 }
 
@@ -417,29 +419,45 @@ ${correction ? `OBSERVAÇÃO DO USUÁRIO: ${correction}. Reavalie o documento co
           } else if (provider === "MISTRAL") {
             if (!apiKey) throw new Error("Chave de API Mistral não configurada.");
             const mistralModel = getProviderConfig("MISTRAL").model;
-            console.log(`[AI] Enviando para Mistral (${mistralModel})...`);
-            aiResponse = await fetch("https://api.mistral.ai/v1/chat/completions", {
+            console.log(`[AI] Enviando para Mistral OCR (${mistralModel})...`);
+            // Mistral não tem visão direta — usa OCR (v1/ocr) para extrair texto da imagem,
+            // depois classifica o texto com um modelo de texto (mistral-small-latest).
+            const ocrRes = await fetch("https://api.mistral.ai/v1/ocr", {
               method: "POST",
               headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
               body: JSON.stringify({
                 model: mistralModel,
-               messages: [{ role: "user", content: [{ type: "image_url", image_url: { url: `data:image/jpeg;base64,${imageBase64}`, detail: "high" } }, { type: "text", text: prompt }] }],
-               temperature: 0.1,
-               max_tokens: 1024,
-               top_p: 0.9
-             })
-           });
-            } else if (provider === "OPENROUTER") {
-              if (!apiKey) throw new Error("Chave de API OpenRouter não configurada.");
-              const openrouterModel = getProviderConfig("OPENROUTER").model;
-              console.log(`[AI] Enviando para OpenRouter (${openrouterModel})...`);
-              aiResponse = await callOpenAICompatible({ baseUrl: "https://openrouter.ai/api", model: openrouterModel, apiKey }, imageBase64, prompt);
-            } else if (provider === "GROQ") {
-              if (!apiKey) throw new Error("Chave de API Groq não configurada.");
-              const groqModel = getProviderConfig("GROQ").model;
-              console.log(`[AI] Enviando para Groq (${groqModel})...`);
-              aiResponse = await callOpenAICompatible({ baseUrl: "https://api.groq.com/openai", model: groqModel, apiKey }, imageBase64, prompt);
-            } else if (provider === "LOCAL_OLLAMA") {
+                document: { type: "image_url", image_url: `data:image/jpeg;base64,${imageBase64}` }
+              })
+            });
+            if (!ocrRes.ok) {
+              const errBody = await ocrRes.text();
+              const { userMessage } = extractAIError(ocrRes.status, errBody);
+              return res.status(ocrRes.status).json({ error: userMessage });
+            }
+            const ocrData = await ocrRes.json() as any;
+            const extractedText = (ocrData.pages || []).map((p: any) => p.markdown || "").join("\n");
+            console.log(`[AI] Mistral OCR extraiu ${extractedText.length} chars, classificando...`);
+            // 2º passo: classificar o texto extraído com modelo de texto
+            const classifyRes = await fetch("https://api.mistral.ai/v1/chat/completions", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+              body: JSON.stringify({
+                model: "mistral-small-latest",
+                messages: [{ role: "user", content: prompt + "\n\n--- TEXTO EXTRAÍDO DO DOCUMENTO ---\n" + extractedText }],
+                temperature: 0.1,
+                max_tokens: 1024,
+              })
+            });
+            aiResponse = classifyRes;
+           } else if (provider === "OPENROUTER") {
+             if (!apiKey) throw new Error("Chave de API OpenRouter não configurada.");
+             const openrouterModel = getProviderConfig("OPENROUTER").model;
+             console.log(`[AI] Enviando para OpenRouter (${openrouterModel})...`);
+             aiResponse = await callOpenAICompatible({ baseUrl: "https://openrouter.ai/api", model: openrouterModel, apiKey }, imageBase64, prompt);
+           } else if (provider === "GROQ") {
+             return res.status(400).json({ error: "Groq não possui modelos de visão disponíveis. Escolha outro provedor (NVIDIA, Google, OpenRouter, etc)." });
+           } else if (provider === "LOCAL_OLLAMA") {
               // Ollama local — sem chave de API. Endpoint /api/chat (não /v1/chat/completions).
               const ollamaConfig = getProviderConfig("LOCAL_OLLAMA");
               console.log(`[AI] Enviando para Ollama local (${ollamaConfig.model})...`);
@@ -478,10 +496,10 @@ ${correction ? `OBSERVAÇÃO DO USUÁRIO: ${correction}. Reavalie o documento co
               console.log(`[AI] Enviando para Ollama Cloud (${ollamaCloudModel})...`);
               aiResponse = await callOpenAICompatible({ baseUrl: "https://chat.api.ollama.ai", model: ollamaCloudModel, apiKey }, imageBase64, prompt);
             } else if (provider === "CODEX") {
-              if (!apiKey) throw new Error("Login Codex necessário. Use o botão de login no app para autenticar.");
+              if (!apiKey) throw new Error("API key da OpenAI necessária. Obtenha em platform.openai.com/api-keys (plano Codex/ChatGPT Pro).");
               const codexModel = getProviderConfig("CODEX").model;
-              console.log(`[AI] Enviando para Codex (${codexModel})...`);
-              aiResponse = await callOpenAICompatible({ baseUrl: "https://api.codex.ai", model: codexModel, apiKey }, imageBase64, prompt);
+              console.log(`[AI] Enviando para OpenAI/Codex (${codexModel})...`);
+              aiResponse = await callOpenAICompatible({ baseUrl: "https://api.openai.com", model: codexModel, apiKey }, imageBase64, prompt);
             } else {
               // NVIDIA (padrão)
               const nvidiaModel = getProviderConfig("NVIDIA").model;

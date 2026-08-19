@@ -66,7 +66,7 @@ describe("Mock dos provedores de IA (catálogo externalizado)", () => {
 
   const providers = [
     "GOOGLE", "NVIDIA", "OPENAI", "ANTHROPIC",
-    "MISTRAL", "OPENROUTER", "GROQ",
+    "MISTRAL", "OPENROUTER",
     "LOCAL_OLLAMA", "OLLAMA_CLOUD", "CODEX",
   ] as const;
 
@@ -79,7 +79,6 @@ describe("Mock dos provedores de IA (catálogo externalizado)", () => {
       return { content: [{ text: json }] };
     }
     if (provider === "LOCAL_OLLAMA") {
-      // Ollama /api/chat retorna { message: { content: "..." } }
       return { message: { content: json } };
     }
     return { choices: [{ message: { content: json } }] };
@@ -123,6 +122,12 @@ describe("Mock dos provedores de IA (catálogo externalizado)", () => {
         if (urlStr.includes("localhost:11434/api/tags")) {
           return Promise.resolve(new Response(JSON.stringify({
             models: [{ name: "llama3.2-vision:11b", model: "llama3.2-vision:11b" }]
+          }), { status: 200, headers: { "Content-Type": "application/json" } }));
+        }
+        // Mocka Mistral OCR (v1/ocr) — retorna texto extraído
+        if (urlStr.includes("api.mistral.ai/v1/ocr")) {
+          return Promise.resolve(new Response(JSON.stringify({
+            pages: [{ markdown: "SANTA CASA DE MISERICORDIA\nFolha de Pagamento" }]
           }), { status: 200, headers: { "Content-Type": "application/json" } }));
         }
         const body = mockResponseForProvider(provider);

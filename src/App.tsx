@@ -74,18 +74,29 @@ function nextPageId(): string {
 }
 
 // ════════════════════════════════════════════════════════════
-// Ollama Local Setup — detecta hardware, instala Ollama, baixa modelo
+// Ollama Local Setup — detecta hardware, 3 opções de modelo, detecta instalados
 // ════════════════════════════════════════════════════════════
+const OLLAMA_MODELS = [
+  { id: "moondream:1.8b", label: "Moondream 1.8B", size: "1.3 GB", minRam: 4, desc: "Leve — PCs fracos (4GB+ RAM)" },
+  { id: "llama3.2-vision:11b", label: "Llama 3.2 Vision 11B", size: "7.8 GB", minRam: 8, desc: "Balanceado — PCs moderados (8GB+ RAM)" },
+  { id: "llama3.2-vision:90b", label: "Llama 3.2 Vision 90B", size: "55 GB", minRam: 32, desc: "Preciso — PCs robustos (32GB+ RAM)" },
+];
+
 function OllamaLocalSetup() {
   const [hw, setHw] = useState<{ totalMemGB: number; cpuCores: number; gpu: string; hasGpu: boolean; suggestedModel: string; reason: string } | null>(null);
   const [installState, setInstallState] = useState<"idle" | "checking" | "downloading" | "installing" | "pulling" | "done" | "error">("idle");
   const [progress, setProgress] = useState<string>("");
   const [errorMsg, setErrorMsg] = useState("");
+  const [selectedModel, setSelectedModel] = useState<string>("");
+  const [installedModels, setInstalledModels] = useState<string[]>([]);
   const api = window.electronAPI;
 
   useEffect(() => {
     if (api?.getHardware) {
-      api.getHardware().then(setHw).catch(() => {});
+      api.getHardware().then(h => {
+        setHw(h);
+        setSelectedModel(h.suggestedModel);
+      }).catch(() => {});
     }
     if (api?.onPullProgress) {
       const clean = api.onPullProgress((p: { line: string; model: string }) => {
@@ -95,8 +106,17 @@ function OllamaLocalSetup() {
     }
   }, []);
 
+  // Detectar modelos já baixados via /api/tags do Ollama
+  useEffect(() => {
+    fetch("http://localhost:11434/api/tags")
+      .then(r => r.json())
+      .then(d => setInstalledModels((d.models || []).map((m: any) => m.name || m.model)))
+      .catch(() => setInstalledModels([]));
+  }, [installState]);
+
   const handleSetup = async () => {
     if (!api) { setErrorMsg("Electron API não disponível."); return; }
+    if (!selectedModel) { setErrorMsg("Selecione um modelo primeiro."); return; }
     setErrorMsg("");
     try {
       setInstallState("checking");
@@ -108,12 +128,11 @@ function OllamaLocalSetup() {
         if (!inst.ok) { setErrorMsg(inst.error || "Falha ao instalar"); setInstallState("error"); return; }
       }
       setInstallState("pulling");
-      const model = hw?.suggestedModel || "llama3.2-vision:11b";
-      setProgress(`Baixando modelo ${model}...`);
-      const pull = await api.pullModel(model);
+      setProgress(`Baixando modelo ${selectedModel}...`);
+      const pull = await api.pullModel(selectedModel);
       if (!pull.ok) { setErrorMsg(pull.error || "Falha ao baixar modelo"); setInstallState("error"); return; }
       setInstallState("done");
-      setProgress(`Modelo ${model} pronto! Salve as configurações.`);
+      setProgress(`Modelo ${selectedModel} pronto! Salve as configurações.`);
     } catch (e: any) {
       setErrorMsg(e.message || "Erro inesperado");
       setInstallState("error");
@@ -137,16 +156,44 @@ function OllamaLocalSetup() {
         </div>
       )}
 
-      <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-xs font-bold text-slate-200">Modelo sugerido</span>
+      <div>
+        <label className="block text-xs font-semibold text-slate-300 mb-1.5">Escolha o modelo local</label>
+        <div className="space-y-2">
+          {OLLAMA_MODELS.map(m => {
+            const isInstalled = installedModels.includes(m.id);
+            const isSuggested = hw?.suggestedModel === m.id;
+            const ramOk = hw ? hw.totalMemGB >= m.minRam : true;
+            return (
+              <label key={m.id} className={`flex items-start gap-2.5 p-2.5 rounded-xl border cursor-pointer transition-all ${selectedModel === m.id ? "border-emerald-600 bg-emerald-950/30" : "border-slate-800 bg-slate-950/40 hover:border-slate-700"}`}>
+                <input
+                  type="radio"
+                  name="ollama-model"
+                  value={m.id}
+                  checked={selectedModel === m.id}
+                  onChange={e => setSelectedModel(e.target.value)}
+                  className="mt-0.5 accent-emerald-500"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-bold text-slate-200">{m.label}</span>
+                    {isSuggested && <span className="text-[10px] text-cyan-300 bg-cyan-950/40 px-1.5 py-0.5 rounded">sugerido</span>}
+                    {isInstalled && <span className="text-[10px] text-emerald-300 bg-emerald-950/40 px-1.5 py-0.5 rounded flex items-center gap-0.5"><CheckCircle className="w-2.5 h-2.5" /> instalado</span>}
+                    {!ramOk && <span className="text-[10px] text-amber-300 bg-amber-950/40 px-1.5 py-0.5 rounded">RAM insuficiente</span>}
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5">{m.desc} • {m.size}</p>
+                </div>
+              </label>
+            );
+          })}
         </div>
-        <code className="text-[12px] text-emerald-300 font-mono">{hw?.suggestedModel || "llama3.2-vision:11b"}</code>
-        <p className="text-[11px] text-slate-500 mt-1">
-          Funciona 100% offline. Primeiro uso baixa o Ollama + modelo (~5-8 GB).
-          Depois, processa sem internet e sem custo de API.
-        </p>
       </div>
+
+      {installedModels.length > 0 && (
+        <p className="text-[11px] text-emerald-400 flex items-center gap-1.5">
+          <CheckCircle className="w-3.5 h-3.5" />
+          {installedModels.length} modelo(s) já baixado(s): {installedModels.join(", ")}
+        </p>
+      )}
 
       {installState !== "idle" && installState !== "done" && progress && (
         <div className="p-2 bg-slate-950 rounded-xl border border-slate-800 text-[11px] text-slate-400 font-mono break-all max-h-24 overflow-y-auto">
@@ -165,8 +212,10 @@ function OllamaLocalSetup() {
       >
         {(installState === "downloading" || installState === "installing" || installState === "pulling") ? (
           <><Loader2 className="w-4 h-4 animate-spin" /> {installState === "downloading" ? "Baixando Ollama..." : installState === "pulling" ? "Baixando modelo..." : "Instalando..."}</>
+        ) : installedModels.includes(selectedModel) ? (
+          <><Check className="w-4 h-4" /> Modelo pronto — salvar e usar</>
         ) : (
-          <><Download className="w-4 h-4" /> Baixar e instalar Ollama + modelo</>
+          <><Download className="w-4 h-4" /> Baixar {selectedModel}</>
         )}
       </button>
     </div>
@@ -185,7 +234,7 @@ function CodexLogin({ apiKey, setApiKey }: { apiKey: string; setApiKey: (v: stri
     setLogging(true);
     try {
       const r = await api.codexLogin();
-      if (!r.ok) alert(r.error || "Falha no login Codex");
+      if (!r.ok) alert(r.error || "Falha no login");
       else if (r.message) alert(r.message);
     } catch (e: any) {
       alert(e.message);
@@ -199,12 +248,12 @@ function CodexLogin({ apiKey, setApiKey }: { apiKey: string; setApiKey: (v: stri
       <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800">
         <div className="flex items-center gap-2 mb-1.5">
           <LogIn className="w-4 h-4 text-indigo-400" />
-          <span className="text-xs font-bold text-slate-200">Codex Pro</span>
+          <span className="text-xs font-bold text-slate-200">Codex Pro (OpenAI)</span>
           <Cloud className="w-3.5 h-3.5 text-slate-500" />
         </div>
         <p className="text-[11px] text-slate-400 leading-relaxed">
-          Use o limite elevado do Codex Pro. Clique em "Fazer login" para autenticar via OAuth.
-          Após autenticar, cole o token da API no campo abaixo.
+          Codex Pro = plano ChatGPT Pro da OpenAI. Use sua API key da OpenAI
+          (obtenha em platform.openai.com/api-keys). Limites elevados para assinantes Pro.
         </p>
       </div>
 
@@ -214,20 +263,20 @@ function CodexLogin({ apiKey, setApiKey }: { apiKey: string; setApiKey: (v: stri
         className="w-full px-4 py-2.5 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
       >
         {logging ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
-        Fazer login no Codex
+        Abrir platform.openai.com
       </button>
 
       <div>
-        <label className="block text-xs font-semibold text-slate-300 mb-1.5">Token da API Codex</label>
+        <label className="block text-xs font-semibold text-slate-300 mb-1.5">API Key da OpenAI</label>
         <input
           type="password"
           value={apiKey}
           onChange={e => setApiKey(e.target.value)}
-          placeholder="Cole o token do Codex aqui"
+          placeholder="sk-..."
           className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
         />
         <p className="text-[11px] text-slate-500 mt-1.5">
-          {apiKey ? "Token salvo em ~/.ai-disec-pdf/settings.json" : "Obtenha o token após o login OAuth."}
+          {apiKey ? "Chave salva em ~/.ai-disec-pdf/settings.json" : "Cole sua API key da OpenAI (sk-...)"}
         </p>
       </div>
     </div>
@@ -1547,13 +1596,13 @@ export default function App() {
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 cursor-pointer"
                 >
                   <optgroup label="Modelos na Nuvem (API Key)">
-                    <option value="NVIDIA">NVIDIA (Llama 3.2 11B Vision — rápido)</option>
-                    <option value="GOOGLE">Google Gemini Flash 2.5</option>
+                    <option value="NVIDIA">NVIDIA (Nemotron Nano 8B — rápido, grátis)</option>
+                    <option value="GOOGLE">Google Gemini 2.5 Flash</option>
                     <option value="OPENAI">OpenAI (GPT-4o)</option>
                     <option value="ANTHROPIC">Anthropic (Claude Sonnet 4)</option>
-                    <option value="MISTRAL">Mistral (Pixtral 12B)</option>
-                    <option value="OPENROUTER">OpenRouter (Gemini Flash via API)</option>
-                    <option value="GROQ">Groq (Llama Vision)</option>
+                    <option value="MISTRAL">Mistral (OCR + classificação)</option>
+                    <option value="OPENROUTER">OpenRouter (Nemotron Nano — FREE)</option>
+                    <option value="GROQ" disabled>Groq (sem visão — indisponível)</option>
                     <option value="OLLAMA_CLOUD">Ollama Cloud (token ollama.com)</option>
                     <option value="CODEX">Codex Pro (login OAuth)</option>
                   </optgroup>
