@@ -19,7 +19,6 @@ const FALLBACK_MODELS: Record<string, { baseUrl: string; model: string }> = {
   ANTHROPIC: { baseUrl: "https://api.anthropic.com", model: "claude-sonnet-4-20250514" },
   MISTRAL: { baseUrl: "https://api.mistral.ai", model: "mistral-ocr-latest" },
   OPENROUTER: { baseUrl: "https://openrouter.ai/api", model: "nvidia/nemotron-nano-12b-v2-vl:free" },
-  GROQ: { baseUrl: "https://api.groq.com/openai", model: "" },
   LOCAL_OLLAMA: { baseUrl: "http://localhost:11434", model: "llama3.2-vision:11b" },
   OLLAMA_CLOUD: { baseUrl: "https://chat.api.ollama.ai", model: "llama3.2-vision:11b" },
   CODEX: { baseUrl: "https://api.openai.com", model: "gpt-4o" },
@@ -277,7 +276,9 @@ export async function startServer(port: number = DEFAULT_PORT, isDev: boolean = 
 
       const settings = getSettings();
       const apiKey = settings.apiKey || "";
-      if (!apiKey) {
+      const providerSetting = (settings.provider || "NVIDIA").toUpperCase();
+      // LOCAL_OLLAMA e CODEX (com OAuth) não precisam de apiKey das settings
+      if (!apiKey && providerSetting !== "LOCAL_OLLAMA" && providerSetting !== "CODEX") {
         return res.status(500).json({
           error: "Nenhuma chave de API configurada. Vá em Configurações e adicione sua chave."
         });
@@ -455,8 +456,6 @@ ${correction ? `OBSERVAÇÃO DO USUÁRIO: ${correction}. Reavalie o documento co
              const openrouterModel = getProviderConfig("OPENROUTER").model;
              console.log(`[AI] Enviando para OpenRouter (${openrouterModel})...`);
              aiResponse = await callOpenAICompatible({ baseUrl: "https://openrouter.ai/api", model: openrouterModel, apiKey }, imageBase64, prompt);
-           } else if (provider === "GROQ") {
-             return res.status(400).json({ error: "Groq não possui modelos de visão disponíveis. Escolha outro provedor (NVIDIA, Google, OpenRouter, etc)." });
            } else if (provider === "LOCAL_OLLAMA") {
               // Ollama local — sem chave de API. Endpoint /api/chat (não /v1/chat/completions).
               const ollamaConfig = getProviderConfig("LOCAL_OLLAMA");
@@ -496,10 +495,21 @@ ${correction ? `OBSERVAÇÃO DO USUÁRIO: ${correction}. Reavalie o documento co
               console.log(`[AI] Enviando para Ollama Cloud (${ollamaCloudModel})...`);
               aiResponse = await callOpenAICompatible({ baseUrl: "https://chat.api.ollama.ai", model: ollamaCloudModel, apiKey }, imageBase64, prompt);
             } else if (provider === "CODEX") {
-              if (!apiKey) throw new Error("API key da OpenAI necessária. Obtenha em platform.openai.com/api-keys (plano Codex/ChatGPT Pro).");
+              // Codex Pro: tenta ler token do OAuth login (~/.codex/auth.json), senão usa apiKey
+              let codexKey = apiKey;
+              if (!codexKey) {
+                try {
+                  const codexAuthPath = path.join(os.homedir(), ".codex", "auth.json");
+                  if (fs.existsSync(codexAuthPath)) {
+                    const auth = JSON.parse(fs.readFileSync(codexAuthPath, "utf8"));
+                    codexKey = auth.tokens?.access_token || auth.access_token || "";
+                  }
+                } catch (e) { /* ignora */ }
+              }
+              if (!codexKey) throw new Error("Login Codex necessário. Clique em 'Sign in with ChatGPT' nas Configurações, ou cole uma API key da OpenAI.");
               const codexModel = getProviderConfig("CODEX").model;
               console.log(`[AI] Enviando para OpenAI/Codex (${codexModel})...`);
-              aiResponse = await callOpenAICompatible({ baseUrl: "https://api.openai.com", model: codexModel, apiKey }, imageBase64, prompt);
+              aiResponse = await callOpenAICompatible({ baseUrl: "https://api.openai.com", model: codexModel, apiKey: codexKey }, imageBase64, prompt);
             } else {
               // NVIDIA (padrão)
               const nvidiaModel = getProviderConfig("NVIDIA").model;

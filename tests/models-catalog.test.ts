@@ -17,15 +17,12 @@ describe("Catálogo de modelos (server/models.json)", () => {
     expect(fs.existsSync(catalogPath)).toBe(true);
     const catalog = JSON.parse(fs.readFileSync(catalogPath, "utf8"));
     expect(catalog.providers).toBeTypeOf("object");
-    const expected = ["NVIDIA", "GOOGLE", "OPENAI", "ANTHROPIC", "MISTRAL", "OPENROUTER", "GROQ"];
+    const expected = ["NVIDIA", "GOOGLE", "OPENAI", "ANTHROPIC", "MISTRAL", "OPENROUTER"];
     for (const p of expected) {
       expect(catalog.providers[p], `provider ${p} ausente`).toBeDefined();
       expect(catalog.providers[p].baseUrl).toBeTypeOf("string");
       expect(Array.isArray(catalog.providers[p].models)).toBe(true);
-      // GROQ não tem visão — models pode ser vazio
-      if (p !== "GROQ") {
-        expect(catalog.providers[p].models.length, `${p}: sem modelos`).toBeGreaterThan(0);
-      }
+      expect(catalog.providers[p].models.length, `${p}: sem modelos`).toBeGreaterThan(0);
       expect(Array.isArray(catalog.providers[p].preferred)).toBe(true);
     }
   });
@@ -40,17 +37,12 @@ describe("Catálogo de modelos (server/models.json)", () => {
     }
   });
 
-  it("catálogo cobre os 10 providers (7 cloud + 3 novos)", () => {
+  it("catálogo cobre os 9 providers (6 cloud + 3 novos)", () => {
     const catalog = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "server", "models.json"), "utf8"));
-    const expected = ["NVIDIA", "GOOGLE", "OPENAI", "ANTHROPIC", "MISTRAL", "OPENROUTER", "GROQ", "LOCAL_OLLAMA", "OLLAMA_CLOUD", "CODEX"];
+    const expected = ["NVIDIA", "GOOGLE", "OPENAI", "ANTHROPIC", "MISTRAL", "OPENROUTER", "LOCAL_OLLAMA", "OLLAMA_CLOUD", "CODEX"];
     for (const p of expected) {
       expect(catalog.providers[p], `${p} ausente do catálogo`).toBeDefined();
     }
-  });
-
-  it("GROQ marcado como noVision (sem modelos de visão)", () => {
-    const catalog = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "server", "models.json"), "utf8"));
-    expect(catalog.providers.GROQ.noVision).toBe(true);
   });
 
   it("MISTRAL marcado como ocrOnly (OCR + classificação)", () => {
@@ -76,15 +68,13 @@ describe("Catálogo de modelos (server/models.json)", () => {
 describe("getProviderConfig (catálogo e fallback)", () => {
   it("FALLBACK_MODELS exportado cobre os 7 providers", async () => {
     const { FALLBACK_MODELS } = await import("../server/server");
-    const expected = ["NVIDIA", "GOOGLE", "OPENAI", "ANTHROPIC", "MISTRAL", "OPENROUTER", "GROQ", "LOCAL_OLLAMA", "OLLAMA_CLOUD", "CODEX"];
+    const expected = ["NVIDIA", "GOOGLE", "OPENAI", "ANTHROPIC", "MISTRAL", "OPENROUTER", "LOCAL_OLLAMA", "OLLAMA_CLOUD", "CODEX"];
     for (const p of expected) {
       expect(FALLBACK_MODELS[p], `${p} ausente do fallback`).toBeDefined();
-      if (p !== "GROQ" && p !== "LOCAL_OLLAMA") {
+      if (p !== "LOCAL_OLLAMA") {
         expect(FALLBACK_MODELS[p].baseUrl.startsWith("https://"), `${p}: baseUrl`).toBe(true);
       }
-      if (p !== "GROQ") {
-        expect(FALLBACK_MODELS[p].model.length, `${p}: model vazio`).toBeGreaterThan(0);
-      }
+      expect(FALLBACK_MODELS[p].model.length, `${p}: model vazio`).toBeGreaterThan(0);
     }
   });
 
@@ -114,7 +104,6 @@ describe("getProviderConfig (catálogo e fallback)", () => {
     // Modelos que sabemos que foram descontinuados/lentos e não devem ser o default
     expect(getProviderConfig("ANTHROPIC").model).not.toBe("claude-3-sonnet-20240229");
     expect(getProviderConfig("MISTRAL").model).not.toBe("open-mistral-vision");
-    expect(getProviderConfig("GROQ").model).not.toBe("llama-3.2-90b-vision-preview");
     // NVIDIA default agora é nemotron-nano-8b (mais rápido, 1.8s)
     expect(getProviderConfig("NVIDIA").model).not.toBe("meta/llama-3.2-90b-vision-instruct");
     expect(getProviderConfig("NVIDIA").model).toBe("nvidia/llama-3.1-nemotron-nano-vl-8b-v1");

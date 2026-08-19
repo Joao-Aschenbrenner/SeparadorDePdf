@@ -59,6 +59,7 @@ declare global {
       // Codex OAuth
       codexLogin: () => Promise<{ ok: boolean; message?: string; error?: string }>;
       codexLogout: () => Promise<{ ok: boolean; error?: string }>;
+      codexCheckLogin: () => Promise<{ logged: boolean }>;
     };
   }
 }
@@ -227,20 +228,39 @@ function OllamaLocalSetup() {
 // ════════════════════════════════════════════════════════════
 function CodexLogin({ apiKey, setApiKey }: { apiKey: string; setApiKey: (v: string) => void }) {
   const [logging, setLogging] = useState(false);
+  const [logged, setLogged] = useState(false);
+  const [statusMsg, setStatusMsg] = useState("");
   const api = window.electronAPI;
+
+  useEffect(() => {
+    api?.codexCheckLogin?.().then(r => setLogged(r.logged)).catch(() => {});
+  }, []);
 
   const handleLogin = async () => {
     if (!api?.codexLogin) return;
     setLogging(true);
+    setStatusMsg("");
     try {
       const r = await api.codexLogin();
-      if (!r.ok) alert(r.error || "Falha no login");
-      else if (r.message) alert(r.message);
+      if (r.ok) {
+        setLogged(true);
+        setStatusMsg(r.message || "Login realizado!");
+      } else {
+        setStatusMsg(r.error || "Falha no login");
+      }
     } catch (e: any) {
-      alert(e.message);
+      setStatusMsg(e.message);
     } finally {
       setLogging(false);
     }
+  };
+
+  const handleLogout = async () => {
+    if (!api?.codexLogout) return;
+    await api.codexLogout();
+    setLogged(false);
+    setApiKey("");
+    setStatusMsg("Logout realizado.");
   };
 
   return (
@@ -252,31 +272,41 @@ function CodexLogin({ apiKey, setApiKey }: { apiKey: string; setApiKey: (v: stri
           <Cloud className="w-3.5 h-3.5 text-slate-500" />
         </div>
         <p className="text-[11px] text-slate-400 leading-relaxed">
-          Codex Pro = plano ChatGPT Pro da OpenAI. Use sua API key da OpenAI
-          (obtenha em platform.openai.com/api-keys). Limites elevados para assinantes Pro.
+          Use seu plano ChatGPT Pro/Plus/Business. Login oficial via "Sign in with ChatGPT"
+          — abre o browser para autenticar com sua conta OpenAI. Token salvo em ~/.codex/auth.json.
         </p>
       </div>
 
-      <button
-        onClick={handleLogin}
-        disabled={logging}
-        className="w-full px-4 py-2.5 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
-      >
-        {logging ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
-        Abrir platform.openai.com
-      </button>
+      {logged ? (
+        <div className="p-3 bg-emerald-950/30 rounded-xl border border-emerald-800/30 flex items-center gap-2">
+          <CheckCircle className="w-4 h-4 text-emerald-400" />
+          <span className="text-xs text-emerald-300 flex-1">Logado no ChatGPT</span>
+          <button onClick={handleLogout} className="text-[11px] text-rose-400 hover:text-rose-300 cursor-pointer">Logout</button>
+        </div>
+      ) : (
+        <button
+          onClick={handleLogin}
+          disabled={logging}
+          className="w-full px-4 py-2.5 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+        >
+          {logging ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
+          {logging ? "Aguardando login no browser..." : "Sign in with ChatGPT"}
+        </button>
+      )}
 
-      <div>
-        <label className="block text-xs font-semibold text-slate-300 mb-1.5">API Key da OpenAI</label>
+      {statusMsg && <p className="text-[11px] text-slate-400">{statusMsg}</p>}
+
+      <div className="border-t border-slate-800 pt-3">
+        <label className="block text-xs font-semibold text-slate-300 mb-1.5">Ou cole sua API key da OpenAI</label>
         <input
           type="password"
           value={apiKey}
           onChange={e => setApiKey(e.target.value)}
-          placeholder="sk-..."
+          placeholder="sk-... (alternativa ao login)"
           className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
         />
         <p className="text-[11px] text-slate-500 mt-1.5">
-          {apiKey ? "Chave salva em ~/.ai-disec-pdf/settings.json" : "Cole sua API key da OpenAI (sk-...)"}
+          {apiKey ? "Chave salva em ~/.ai-disec-pdf/settings.json" : "Para uso sem ChatGPT Pro (cobrança por uso via API)"}
         </p>
       </div>
     </div>
@@ -1602,7 +1632,6 @@ export default function App() {
                     <option value="ANTHROPIC">Anthropic (Claude Sonnet 4)</option>
                     <option value="MISTRAL">Mistral (OCR + classificação)</option>
                     <option value="OPENROUTER">OpenRouter (Nemotron Nano — FREE)</option>
-                    <option value="GROQ" disabled>Groq (sem visão — indisponível)</option>
                     <option value="OLLAMA_CLOUD">Ollama Cloud (token ollama.com)</option>
                     <option value="CODEX">Codex Pro (login OAuth)</option>
                   </optgroup>

@@ -47,15 +47,6 @@
       "visionKeywords": ["vision", "vl", "nemotron", "gemma"],
       "preferred": ["nvidia/nemotron-nano-12b-v2-vl:free"]
     },
-    "GROQ": {
-      "_comment": "Groq nao tem modelos de visao atualmente. Apenas texto/whisper.",
-      "baseUrl": "https://api.groq.com/openai",
-      "models": [],
-      "modelsEndpoint": "/v1/models",
-      "visionKeywords": [],
-      "preferred": [],
-      "noVision": true
-    },
     "LOCAL_OLLAMA": {
       "_comment": "Modelo local rodando via Ollama (http://localhost:11434). Sem chave de API. Modelo baixado automaticamente.",
       "baseUrl": "http://localhost:11434",

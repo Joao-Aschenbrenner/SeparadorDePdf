@@ -52,4 +52,5 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Codex OAuth login
   codexLogin: () => ipcRenderer.invoke("codex:login"),
   codexLogout: () => ipcRenderer.invoke("codex:logout"),
+  codexCheckLogin: () => ipcRenderer.invoke("codex:check-login"),
 });
