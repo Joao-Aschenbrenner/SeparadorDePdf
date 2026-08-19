@@ -13,7 +13,7 @@ const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
 // Catálogo de modelos: lê server/models.json (atualizado mensalmente via CI).
 // Fallback hardcoded caso o arquivo não exista ou esteja corrompido.
 const FALLBACK_MODELS: Record<string, { baseUrl: string; model: string }> = {
-  NVIDIA: { baseUrl: "https://integrate.api.nvidia.com", model: "meta/llama-3.2-90b-vision-instruct" },
+  NVIDIA: { baseUrl: "https://integrate.api.nvidia.com", model: "meta/llama-3.2-11b-vision-instruct" },
   GOOGLE: { baseUrl: "https://generativelanguage.googleapis.com", model: "gemini-2.5-flash" },
   OPENAI: { baseUrl: "https://api.openai.com", model: "gpt-4o" },
   ANTHROPIC: { baseUrl: "https://api.anthropic.com", model: "claude-sonnet-4-20250514" },
@@ -367,6 +367,24 @@ ${correction ? `OBSERVAÇÃO DO USUÁRIO: ${correction}. Reavalie o documento co
               // Ollama local — sem chave de API. Endpoint /api/chat (não /v1/chat/completions).
               const ollamaConfig = getProviderConfig("LOCAL_OLLAMA");
               console.log(`[AI] Enviando para Ollama local (${ollamaConfig.model})...`);
+
+              // Verifica se o modelo está baixado antes de chamar /api/chat
+              try {
+                const tagsRes = await fetch(`${ollamaConfig.baseUrl}/api/tags`, { method: "GET" });
+                if (tagsRes.ok) {
+                  const tagsData = await tagsRes.json() as any;
+                  const installed = (tagsData.models || []).map((m: any) => m.name || m.model);
+                  if (!installed.includes(ollamaConfig.model)) {
+                    return res.status(400).json({
+                      error: `Modelo "${ollamaConfig.model}" não está baixado. Vá em Configurações → Ollama Local e clique em "Baixar e instalar Ollama + modelo" para baixá-lo (~7.8 GB). Modelos instalados: ${installed.join(", ") || "nenhum"}.`
+                    });
+                  }
+                }
+              } catch (tagErr) {
+                // Se falhar a verificação, segue para /api/chat que dará o erro real
+                console.warn("[AI] Não foi possível verificar /api/tags, tentando /api/chat direto:", tagErr instanceof Error ? tagErr.message : tagErr);
+              }
+
               aiResponse = await fetch(`${ollamaConfig.baseUrl}/api/chat`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },

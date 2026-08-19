@@ -87,10 +87,13 @@ describe("getProviderConfig (catálogo e fallback)", () => {
 
   it("modelos do catálogo não são os antigos descontinuados", async () => {
     const { getProviderConfig } = await import("../server/server");
-    // Modelos que sabemos que foram descontinuados e não devem mais aparecer
+    // Modelos que sabemos que foram descontinuados/lentos e não devem ser o default
     expect(getProviderConfig("ANTHROPIC").model).not.toBe("claude-3-sonnet-20240229");
     expect(getProviderConfig("MISTRAL").model).not.toBe("open-mistral-vision");
     expect(getProviderConfig("GROQ").model).not.toBe("llama-3.2-90b-vision-preview");
+    // NVIDIA 90B é muito lento (timeout 60s+) — default deve ser o 11B rápido
+    expect(getProviderConfig("NVIDIA").model).not.toBe("meta/llama-3.2-90b-vision-instruct");
+    expect(getProviderConfig("NVIDIA").model).toBe("meta/llama-3.2-11b-vision-instruct");
   });
 });
 

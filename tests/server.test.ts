@@ -119,6 +119,12 @@ describe("Mock dos provedores de IA (catálogo externalizado)", () => {
         if (urlStr.includes(`localhost:${PORT}`) || urlStr.includes(`127.0.0.1:${PORT}`)) {
           return originalFetch(url, init);
         }
+        // Mocka /api/tags do Ollama local como modelo já baixado
+        if (urlStr.includes("localhost:11434/api/tags")) {
+          return Promise.resolve(new Response(JSON.stringify({
+            models: [{ name: "llama3.2-vision:11b", model: "llama3.2-vision:11b" }]
+          }), { status: 200, headers: { "Content-Type": "application/json" } }));
+        }
         const body = mockResponseForProvider(provider);
         return Promise.resolve(new Response(JSON.stringify(body), {
           status: 200,

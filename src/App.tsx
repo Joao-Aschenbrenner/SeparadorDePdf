@@ -1547,7 +1547,7 @@ export default function App() {
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 cursor-pointer"
                 >
                   <optgroup label="Modelos na Nuvem (API Key)">
-                    <option value="NVIDIA">NVIDIA (Llama 3.2 90B Vision)</option>
+                    <option value="NVIDIA">NVIDIA (Llama 3.2 11B Vision — rápido)</option>
                     <option value="GOOGLE">Google Gemini Flash 2.5</option>
                     <option value="OPENAI">OpenAI (GPT-4o)</option>
                     <option value="ANTHROPIC">Anthropic (Claude Sonnet 4)</option>

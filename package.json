@@ -2,7 +2,7 @@
   "name": "ai-disec-pdf",
   "author": "João Aschenbrenner",
   "private": true,
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "AI Disec PDF - Separador Inteligente de PDF com IA",
   "type": "module",
   "main": "electron/main.cjs",
