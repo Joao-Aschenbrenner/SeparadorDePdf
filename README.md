@@ -67,7 +67,7 @@ O app verifica atualizações automaticamente toda vez que inicia.
 | Desktop | Electron 34 + electron-builder |
 | IA | Google Gemini / OpenAI / Anthropic / NVIDIA / Mistral / OpenRouter / Ollama / Codex |
 | PDF | pdf-lib + pdfjs-dist + sharp |
-| Testes | Vitest (442 testes) |
+| Testes | Vitest (445 testes) |
 | Build | Vite 6 + esbuild |
 
 ## Estrutura do projeto

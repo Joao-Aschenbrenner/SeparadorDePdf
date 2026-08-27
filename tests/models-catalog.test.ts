@@ -195,4 +195,88 @@ describe("Mock dos 8 provedores de IA", () => {
       expect(capturedBody.model).not.toBe("open-mistral-vision");
     }
   });
+
+  it("Ollama Local usa o modelo salvo nas settings (moondream selecionado)", async () => {
+    // Usuário escolheu o modelo mais básico que já está instalado
+    fs.writeFileSync(SETTINGS_FILE, JSON.stringify({ provider: "LOCAL_OLLAMA", apiKey: "", model: "moondream:1.8b" }));
+
+    let capturedModel = "";
+    vi.spyOn(globalThis as any, "fetch").mockImplementation(
+      (url: string | URL, init?: any) => {
+        const urlStr = url.toString();
+        if (urlStr.includes("localhost:11434/api/tags")) {
+          return Promise.resolve(new Response(JSON.stringify({ models: [{ name: "moondream:1.8b" }] }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }));
+        }
+        if (urlStr.includes("localhost:11434/api/chat")) {
+          capturedModel = init?.body ? JSON.parse(init.body).model : "";
+          const json = '{"isNotaFiscal":false,"companyName":"Mock","valor":100.50,"documentType":"outros"}';
+          return Promise.resolve(new Response(JSON.stringify({ message: { content: json } }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }));
+        }
+        if (urlStr.includes(`localhost:${PORT}`) || urlStr.includes(`127.0.0.1:${PORT}`)) {
+          return originalFetch(url, init);
+        }
+        return Promise.resolve(new Response(JSON.stringify({}), { status: 500 }));
+      }
+    );
+
+    const response = await fetch(`${BASE_URL}/api/extract`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pdfBase64: testPdfBase64, originalName: "test.pdf", pageIndex: 0 }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(capturedModel).toBe("moondream:1.8b");
+  });
+
+  it("Ollama Local bloqueia modelo não baixado com erro claro", async () => {
+    fs.writeFileSync(SETTINGS_FILE, JSON.stringify({ provider: "LOCAL_OLLAMA", apiKey: "", model: "llama3.2-vision:11b" }));
+
+    vi.spyOn(globalThis as any, "fetch").mockImplementation(
+      (url: string | URL, init?: any) => {
+        const urlStr = url.toString();
+        if (urlStr.includes("localhost:11434/api/tags")) {
+          return Promise.resolve(new Response(JSON.stringify({ models: [{ name: "moondream:1.8b" }] }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }));
+        }
+        if (urlStr.includes(`localhost:${PORT}`) || urlStr.includes(`127.0.0.1:${PORT}`)) {
+          return originalFetch(url, init);
+        }
+        return Promise.resolve(new Response(JSON.stringify({}), { status: 500 }));
+      }
+    );
+
+    const response = await fetch(`${BASE_URL}/api/extract`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pdfBase64: testPdfBase64, originalName: "test.pdf", pageIndex: 0 }),
+    });
+
+    expect(response.status).toBe(400);
+    const data = await response.json();
+    expect(data.error).toContain("llama3.2-vision:11b");
+    expect(data.error).toContain("moondream:1.8b");
+  });
+
+  it("POST /api/settings persiste o modelo local escolhido", async () => {
+    const post = await fetch(`${BASE_URL}/api/settings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider: "LOCAL_OLLAMA", apiKey: "", model: "moondream:1.8b" }),
+    });
+    expect(post.status).toBe(200);
+
+    const get = await fetch(`${BASE_URL}/api/settings`);
+    const s = await get.json();
+    expect(s.provider).toBe("LOCAL_OLLAMA");
+    expect(s.model).toBe("moondream:1.8b");
+  });
 });

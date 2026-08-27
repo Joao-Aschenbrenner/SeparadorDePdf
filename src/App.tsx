@@ -83,20 +83,25 @@ const OLLAMA_MODELS = [
   { id: "llama3.2-vision:90b", label: "Llama 3.2 Vision 90B", size: "55 GB", minRam: 32, desc: "Preciso — PCs robustos (32GB+ RAM)" },
 ];
 
-function OllamaLocalSetup() {
+function OllamaLocalSetup({ model, onModelChange }: { model: string; onModelChange: (m: string) => void }) {
   const [hw, setHw] = useState<{ totalMemGB: number; cpuCores: number; gpu: string; hasGpu: boolean; suggestedModel: string; reason: string } | null>(null);
   const [installState, setInstallState] = useState<"idle" | "checking" | "downloading" | "installing" | "pulling" | "done" | "error">("idle");
   const [progress, setProgress] = useState<string>("");
   const [errorMsg, setErrorMsg] = useState("");
-  const [selectedModel, setSelectedModel] = useState<string>("");
   const [installedModels, setInstalledModels] = useState<string[]>([]);
   const api = window.electronAPI;
+  // Refs para uso no efeito de montagem sem recriar o efeito a cada render
+  const modelRef = useRef(model);
+  modelRef.current = model;
+  const onModelChangeRef = useRef(onModelChange);
+  onModelChangeRef.current = onModelChange;
 
   useEffect(() => {
     if (api?.getHardware) {
       api.getHardware().then(h => {
         setHw(h);
-        setSelectedModel(h.suggestedModel);
+        // Só sugere modelo se o usuário ainda não salvou uma escolha
+        if (!modelRef.current) onModelChangeRef.current(h.suggestedModel);
       }).catch(() => {});
     }
     if (api?.onPullProgress) {
@@ -117,7 +122,7 @@ function OllamaLocalSetup() {
 
   const handleSetup = async () => {
     if (!api) { setErrorMsg("Electron API não disponível."); return; }
-    if (!selectedModel) { setErrorMsg("Selecione um modelo primeiro."); return; }
+    if (!model) { setErrorMsg("Selecione um modelo primeiro."); return; }
     setErrorMsg("");
     try {
       setInstallState("checking");
@@ -129,11 +134,11 @@ function OllamaLocalSetup() {
         if (!inst.ok) { setErrorMsg(inst.error || "Falha ao instalar"); setInstallState("error"); return; }
       }
       setInstallState("pulling");
-      setProgress(`Baixando modelo ${selectedModel}...`);
-      const pull = await api.pullModel(selectedModel);
+      setProgress(`Baixando modelo ${model}...`);
+      const pull = await api.pullModel(model);
       if (!pull.ok) { setErrorMsg(pull.error || "Falha ao baixar modelo"); setInstallState("error"); return; }
       setInstallState("done");
-      setProgress(`Modelo ${selectedModel} pronto! Salve as configurações.`);
+      setProgress(`Modelo ${model} pronto! Salve as configurações.`);
     } catch (e: any) {
       setErrorMsg(e.message || "Erro inesperado");
       setInstallState("error");
@@ -165,13 +170,13 @@ function OllamaLocalSetup() {
             const isSuggested = hw?.suggestedModel === m.id;
             const ramOk = hw ? hw.totalMemGB >= m.minRam : true;
             return (
-              <label key={m.id} className={`flex items-start gap-2.5 p-2.5 rounded-xl border cursor-pointer transition-all ${selectedModel === m.id ? "border-emerald-600 bg-emerald-950/30" : "border-slate-800 bg-slate-950/40 hover:border-slate-700"}`}>
+              <label key={m.id} className={`flex items-start gap-2.5 p-2.5 rounded-xl border cursor-pointer transition-all ${model === m.id ? "border-emerald-600 bg-emerald-950/30" : "border-slate-800 bg-slate-950/40 hover:border-slate-700"}`}>
                 <input
                   type="radio"
                   name="ollama-model"
                   value={m.id}
-                  checked={selectedModel === m.id}
-                  onChange={e => setSelectedModel(e.target.value)}
+                  checked={model === m.id}
+                  onChange={e => onModelChange(e.target.value)}
                   className="mt-0.5 accent-emerald-500"
                 />
                 <div className="flex-1 min-w-0">
@@ -213,10 +218,10 @@ function OllamaLocalSetup() {
       >
         {(installState === "downloading" || installState === "installing" || installState === "pulling") ? (
           <><Loader2 className="w-4 h-4 animate-spin" /> {installState === "downloading" ? "Baixando Ollama..." : installState === "pulling" ? "Baixando modelo..." : "Instalando..."}</>
-        ) : installedModels.includes(selectedModel) ? (
+        ) : installedModels.includes(model) ? (
           <><Check className="w-4 h-4" /> Modelo pronto — salvar e usar</>
         ) : (
-          <><Download className="w-4 h-4" /> Baixar {selectedModel}</>
+          <><Download className="w-4 h-4" /> Baixar {model}</>
         )}
       </button>
     </div>
@@ -338,6 +343,7 @@ export default function App() {
   const [showDocModal, setShowDocModal] = useState(false);
   const [settingsProvider, setSettingsProvider] = useState("NVIDIA");
   const [settingsApiKey, setSettingsApiKey] = useState("");
+  const [settingsLocalModel, setSettingsLocalModel] = useState("");
   const [currentProvider, setCurrentProvider] = useState("NVIDIA");
   const [savingSettings, setSavingSettings] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
@@ -354,6 +360,7 @@ export default function App() {
       if (s.provider) setCurrentProvider(s.provider);
       if (s.provider) setSettingsProvider(s.provider);
       if (s.apiKey) setSettingsApiKey(s.apiKey);
+      if (s.model) setSettingsLocalModel(s.model);
       if (!s.apiKey) {
         setTimeout(() => setShowFirstTimeWarning(true), 800);
       }
@@ -818,7 +825,7 @@ export default function App() {
       const res = await fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider: settingsProvider, apiKey: settingsApiKey }),
+        body: JSON.stringify({ provider: settingsProvider, apiKey: settingsApiKey, model: settingsLocalModel }),
       });
       if (res.ok) {
         setCurrentProvider(settingsProvider);
@@ -869,17 +876,25 @@ export default function App() {
         <div className="flex items-center gap-4">
           <div className="flex flex-col items-end hidden md:flex">
             <span className="text-[9px] uppercase tracking-widest text-slate-500 font-bold">Motor Inteligente</span>
-              <span className={`text-xs font-semibold flex items-center gap-1.5 mt-0.5 ${settingsApiKey ? "text-emerald-400" : "text-rose-400"}`}>
-                <span className={`w-2.5 h-2.5 rounded-full animate-pulse ${settingsApiKey ? "bg-emerald-500" : "bg-rose-500"}`}></span> {settingsApiKey ? `${currentProvider} ativo` : "Configure a chave de API"}
-                {!settingsApiKey && (
+              {currentProvider === "LOCAL_OLLAMA" ? (
+                <span className="text-xs font-semibold flex items-center gap-1.5 mt-0.5 text-emerald-400">
+                  <span className="w-2.5 h-2.5 rounded-full animate-pulse bg-emerald-500"></span> Ollama Local ativo
+                </span>
+              ) : settingsApiKey ? (
+                <span className="text-xs font-semibold flex items-center gap-1.5 mt-0.5 text-emerald-400">
+                  <span className="w-2.5 h-2.5 rounded-full animate-pulse bg-emerald-500"></span> {currentProvider} ativo
+                </span>
+              ) : (
+                <span className="text-xs font-semibold flex items-center gap-1.5 mt-0.5 text-rose-400">
+                  <span className="w-2.5 h-2.5 rounded-full animate-pulse bg-rose-500"></span> Configure a chave de API
                   <span className="group relative">
                     <Info className="w-3.5 h-3.5 text-rose-400 cursor-help" />
                     <span className="absolute right-0 top-6 w-56 bg-slate-800 text-slate-300 text-[10px] leading-relaxed p-2 rounded-lg border border-slate-700 shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                      Va em Configuracoes (engrenagem) para adicionar uma chave de API e ativar o motor de IA.
+                      Va em Configuracoes (engrenagem) para adicionar uma chave de API. Ollama Local funciona sem chave.
                     </span>
                   </span>
-                )}
-              </span>
+                </span>
+              )}
           </div>
 
           <button
@@ -912,7 +927,7 @@ export default function App() {
       </header>
       </div>
 
-      {showFirstTimeWarning && !settingsApiKey && (
+      {showFirstTimeWarning && !settingsApiKey && currentProvider !== "LOCAL_OLLAMA" && (
         <div className="max-w-[1600px] w-full mx-auto px-4 md:px-8 pt-2">
           <div className="bg-rose-950/30 border border-rose-800/40 rounded-xl px-5 py-3 flex items-start gap-3 animate-fadeIn">
             <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
@@ -1641,7 +1656,7 @@ export default function App() {
               </div>
 
               {settingsProvider === "LOCAL_OLLAMA" ? (
-                <OllamaLocalSetup />
+                <OllamaLocalSetup model={settingsLocalModel} onModelChange={setSettingsLocalModel} />
               ) : settingsProvider === "CODEX" ? (
                 <CodexLogin apiKey={settingsApiKey} setApiKey={setSettingsApiKey} />
               ) : (

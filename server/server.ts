@@ -458,8 +458,10 @@ ${correction ? `OBSERVAÇÃO DO USUÁRIO: ${correction}. Reavalie o documento co
              aiResponse = await callOpenAICompatible({ baseUrl: "https://openrouter.ai/api", model: openrouterModel, apiKey }, imageBase64, prompt);
            } else if (provider === "LOCAL_OLLAMA") {
               // Ollama local — sem chave de API. Endpoint /api/chat (não /v1/chat/completions).
+              // O modelo escolhido nas Configurações (settings.model) tem prioridade sobre o default do catálogo.
+              const ollamaLocalModel = settings.model || getProviderConfig("LOCAL_OLLAMA").model;
               const ollamaConfig = getProviderConfig("LOCAL_OLLAMA");
-              console.log(`[AI] Enviando para Ollama local (${ollamaConfig.model})...`);
+              console.log(`[AI] Enviando para Ollama local (${ollamaLocalModel})...`);
 
               // Verifica se o modelo está baixado antes de chamar /api/chat
               try {
@@ -467,9 +469,9 @@ ${correction ? `OBSERVAÇÃO DO USUÁRIO: ${correction}. Reavalie o documento co
                 if (tagsRes.ok) {
                   const tagsData = await tagsRes.json() as any;
                   const installed = (tagsData.models || []).map((m: any) => m.name || m.model);
-                  if (!installed.includes(ollamaConfig.model)) {
+                  if (!installed.includes(ollamaLocalModel)) {
                     return res.status(400).json({
-                      error: `Modelo "${ollamaConfig.model}" não está baixado. Vá em Configurações → Ollama Local e clique em "Baixar e instalar Ollama + modelo" para baixá-lo (~7.8 GB). Modelos instalados: ${installed.join(", ") || "nenhum"}.`
+                      error: `Modelo "${ollamaLocalModel}" não está baixado. Vá em Configurações → Ollama Local e clique em "Baixar e instalar Ollama + modelo" para baixá-lo. Modelos instalados: ${installed.join(", ") || "nenhum"}.`
                     });
                   }
                 }
@@ -482,7 +484,7 @@ ${correction ? `OBSERVAÇÃO DO USUÁRIO: ${correction}. Reavalie o documento co
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                  model: ollamaConfig.model,
+                  model: ollamaLocalModel,
                   messages: [{ role: "user", content: prompt }],
                   images: [imageBase64],
                   stream: false,
@@ -641,22 +643,22 @@ app.get("/api/settings", (req, res) => {
       const data = JSON.parse(fs.readFileSync(SETTINGS_FILE, "utf8"));
       return res.json(data);
     }
-    return res.json({ provider: "NVIDIA", apiKey: "" });
+    return res.json({ provider: "NVIDIA", apiKey: "", model: "" });
   } catch {
-    return res.json({ provider: "NVIDIA", apiKey: "" });
+    return res.json({ provider: "NVIDIA", apiKey: "", model: "" });
   }
 });
 
 app.post("/api/settings", (req, res) => {
   try {
     ensureDataDir();
-    const { provider, apiKey } = req.body;
+    const { provider, apiKey, model } = req.body;
     if (!provider || apiKey === undefined) {
       return res.status(400).json({ error: "Provider e apiKey são obrigatórios." });
     }
-    const settings = { provider: provider.toUpperCase(), apiKey };
+    const settings = { provider: provider.toUpperCase(), apiKey, model: typeof model === "string" ? model : "" };
     fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2), "utf8");
-    console.log(`[settings] Saved: provider=${settings.provider}`);
+    console.log(`[settings] Saved: provider=${settings.provider} model=${settings.model || "(default)"}`);
     return res.json({ success: true });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
@@ -670,7 +672,7 @@ function getSettings() {
       return JSON.parse(fs.readFileSync(SETTINGS_FILE, "utf8"));
     }
   } catch {}
-  return { provider: "NVIDIA", apiKey: "" };
+  return { provider: "NVIDIA", apiKey: "", model: "" };
 }
 
 // ─── Upload Logs API ──────────────────────────────────
