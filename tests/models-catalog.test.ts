@@ -104,9 +104,10 @@ describe("getProviderConfig (catálogo e fallback)", () => {
     // Modelos que sabemos que foram descontinuados/lentos e não devem ser o default
     expect(getProviderConfig("ANTHROPIC").model).not.toBe("claude-3-sonnet-20240229");
     expect(getProviderConfig("MISTRAL").model).not.toBe("open-mistral-vision");
-    // NVIDIA default agora é nemotron-nano-8b (mais rápido, 1.8s)
+    // NVIDIA default agora é llama-3.2-11b-vision (nano-8b entrou em EOL em 2026-08-26)
     expect(getProviderConfig("NVIDIA").model).not.toBe("meta/llama-3.2-90b-vision-instruct");
-    expect(getProviderConfig("NVIDIA").model).toBe("nvidia/llama-3.1-nemotron-nano-vl-8b-v1");
+    expect(getProviderConfig("NVIDIA").model).toBe("meta/llama-3.2-11b-vision-instruct");
+    expect(getProviderConfig("OPENROUTER").model).toBe("google/gemma-4-26b-a4b-it:free");
   });
 });
 

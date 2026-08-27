@@ -13,12 +13,12 @@ const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
 // Catálogo de modelos: lê server/models.json (atualizado mensalmente via CI).
 // Fallback hardcoded caso o arquivo não exista ou esteja corrompido.
 const FALLBACK_MODELS: Record<string, { baseUrl: string; model: string }> = {
-  NVIDIA: { baseUrl: "https://integrate.api.nvidia.com", model: "nvidia/llama-3.1-nemotron-nano-vl-8b-v1" },
+  NVIDIA: { baseUrl: "https://integrate.api.nvidia.com", model: "meta/llama-3.2-11b-vision-instruct" },
   GOOGLE: { baseUrl: "https://generativelanguage.googleapis.com", model: "gemini-2.5-flash" },
   OPENAI: { baseUrl: "https://api.openai.com", model: "gpt-4o" },
   ANTHROPIC: { baseUrl: "https://api.anthropic.com", model: "claude-sonnet-4-20250514" },
   MISTRAL: { baseUrl: "https://api.mistral.ai", model: "mistral-ocr-latest" },
-  OPENROUTER: { baseUrl: "https://openrouter.ai/api", model: "nvidia/nemotron-nano-12b-v2-vl:free" },
+  OPENROUTER: { baseUrl: "https://openrouter.ai/api", model: "google/gemma-4-26b-a4b-it:free" },
   LOCAL_OLLAMA: { baseUrl: "http://localhost:11434", model: "llama3.2-vision:11b" },
   OLLAMA_CLOUD: { baseUrl: "https://chat.api.ollama.ai", model: "llama3.2-vision:11b" },
   CODEX: { baseUrl: "https://api.openai.com", model: "gpt-4o" },
@@ -362,7 +362,7 @@ ${correction ? `OBSERVAÇÃO DO USUÁRIO: ${correction}. Reavalie o documento co
        const provider = settings.provider || "GOOGLE";
        let aiResponse;
        try {
-         // Helper for OpenAI-compatible providers (OpenRouter, Groq, NVIDIA)
+         // Helper for OpenAI-compatible providers (OpenRouter, NVIDIA)
          interface OpenAICompatConfig { baseUrl: string; model: string; apiKey: string; }
          const callOpenAICompatible = (config: OpenAICompatConfig, image: string, promptText: string) => {
            return fetch(`${config.baseUrl}/v1/chat/completions`, {

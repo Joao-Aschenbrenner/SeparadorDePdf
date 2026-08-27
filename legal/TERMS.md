@@ -15,7 +15,7 @@ Este Software é fornecido para uso pessoal e profissional, sob licença MIT. Vo
 ## 3. Processamento de Dados
 
 - Todo o processamento de PDFs ocorre localmente na sua máquina.
-- As páginas dos documentos são enviadas exclusivamente para o provedor de IA selecionado por você (NVIDIA, Google, Mistral, OpenRouter, Groq, OpenAI, Anthropic) para fins de extração de metadados.
+- As páginas dos documentos são enviadas exclusivamente para o provedor de IA selecionado por você (NVIDIA, Google, Mistral, OpenRouter, OpenAI, Anthropic, Ollama local/cloud, Codex) para fins de extração de metadados.
 - Nenhum dado é armazenado em servidores terceiros além do necessário para a requisição à API de IA escolhida.
 - Recomenda-se não processar documentos contendo informações sensíveis sem consultar a política de privacidade do provedor de IA utilizado.
 

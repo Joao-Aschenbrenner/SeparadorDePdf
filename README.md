@@ -18,7 +18,7 @@ Aplicação desktop (Electron + React) que divide PDFs contendo múltiplos docum
 
 - **Divisão inteligente** — extrai cada página de um PDF multifolha como arquivo independente
 - **Renomeação automática** — IA identifica o tipo de documento (NF-e, DARF, holerite, extrato, imposto) e nomeia cada arquivo com dados relevantes (empresa, valor, número da nota, funcionário)
-- **7 provedores de IA** — Google Gemini, OpenAI GPT-4o, Anthropic Claude, NVIDIA Llama Vision, Mistral, OpenRouter e Groq
+- **9 provedores de IA** — Google Gemini, OpenAI GPT-4o, Anthropic Claude, NVIDIA Llama Vision, Mistral OCR, OpenRouter, Ollama (local e cloud) e Codex
 - **Editor manual** — corrija ou preencha metadados extraídos; o nome do arquivo é recalculado automaticamente
 - **Preview interativo** — visualização lado a lado de cada página com seus dados extraídos
 - **Download em ZIP** — pacote organizado com todos os documentos processados
@@ -29,13 +29,15 @@ Aplicação desktop (Electron + React) que divide PDFs contendo múltiplos docum
 
 | Provedor | Modelo | Imagens |
 |---|---|---|
-| Google | Gemini 2.0 Flash (grátis) | Sim |
-| NVIDIA | Llama 3.2 90B Vision | Sim |
+| Google | Gemini 2.5 Flash | Sim |
+| NVIDIA | Llama 3.2 11B Vision | Sim |
 | OpenAI | GPT-4o | Sim |
-| Anthropic | Claude 3 Sonnet | Sim |
-| Mistral | Mistral Vision | Sim |
-| OpenRouter | Gemini Flash via API | Sim |
-| Groq | Llama Vision (grátis) | Sim |
+| Anthropic | Claude Sonnet 4 | Sim |
+| Mistral | Mistral OCR | Sim |
+| OpenRouter | Gemma 4 26B (FREE) | Sim |
+| Ollama Cloud | Llama Vision | Sim |
+| Ollama Local | Llama 3.2 Vision 11B | Sim |
+| Codex | GPT-4o | Sim |
 
 
 ## Download
@@ -63,9 +65,9 @@ O app verifica atualizações automaticamente toda vez que inicia.
 | Frontend | React 19 + TypeScript + Tailwind CSS 4 |
 | Backend | Express + TypeScript (executado no Electron) |
 | Desktop | Electron 34 + electron-builder |
-| IA | Google Gemini / OpenAI / Anthropic / NVIDIA / Mistral / OpenRouter / Groq |
+| IA | Google Gemini / OpenAI / Anthropic / NVIDIA / Mistral / OpenRouter / Ollama / Codex |
 | PDF | pdf-lib + pdfjs-dist + sharp |
-| Testes | Vitest (386 testes) |
+| Testes | Vitest (442 testes) |
 | Build | Vite 6 + esbuild |
 
 ## Estrutura do projeto

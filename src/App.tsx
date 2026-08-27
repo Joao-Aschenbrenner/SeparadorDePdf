@@ -1554,15 +1554,14 @@ export default function App() {
               </section>
               <section>
                 <h4 className="font-bold text-white text-base mb-2">Provedores de IA</h4>
-                <p>São 10 provedores disponíveis. Escolha em Configurações (ícone de engrenagem):</p>
+                <p>São 9 provedores disponíveis. Escolha em Configurações (ícone de engrenagem):</p>
                 <ul className="list-disc list-inside space-y-1 text-slate-400 mt-1">
-                  <li><strong className="text-slate-200">NVIDIA Llama 3.2 Vision</strong> — Modelo 90B</li>
+                  <li><strong className="text-slate-200">NVIDIA Llama 3.2 Vision</strong> — Modelo 11B rápido</li>
                   <li><strong className="text-slate-200">Google Gemini 2.5 Flash</strong> — Rápido, suporta imagens</li>
                   <li><strong className="text-slate-200">OpenAI GPT-4o</strong> — Modelo multimodal da OpenAI</li>
                   <li><strong className="text-slate-200">Anthropic Claude Sonnet 4</strong> — Multimodal</li>
-                  <li><strong className="text-slate-200">Mistral Pixtral 12B</strong> — Multimodal</li>
-                  <li><strong className="text-slate-200">OpenRouter</strong> — Acesso a 200+ modelos</li>
-                  <li><strong className="text-slate-200">Groq</strong> — Inferência ultrarrápida</li>
+                  <li><strong className="text-slate-200">Mistral OCR</strong> — OCR em nuvem</li>
+                  <li><strong className="text-slate-200">OpenRouter</strong> — Modelos grátis de visão</li>
                   <li><strong className="text-slate-200">Ollama Cloud</strong> — Llama Vision via Ollama</li>
                   <li><strong className="text-slate-200">Codex Pro</strong> — Limite elevado via login OAuth</li>
                   <li><strong className="text-slate-200">Ollama Local</strong> — 100% offline, download automático</li>
@@ -1626,12 +1625,12 @@ export default function App() {
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 cursor-pointer"
                 >
                   <optgroup label="Modelos na Nuvem (API Key)">
-                    <option value="NVIDIA">NVIDIA (Nemotron Nano 8B — rápido, grátis)</option>
+                    <option value="NVIDIA">NVIDIA (Llama 3.2 11B Vision — rápido, grátis)</option>
                     <option value="GOOGLE">Google Gemini 2.5 Flash</option>
                     <option value="OPENAI">OpenAI (GPT-4o)</option>
                     <option value="ANTHROPIC">Anthropic (Claude Sonnet 4)</option>
                     <option value="MISTRAL">Mistral (OCR + classificação)</option>
-                    <option value="OPENROUTER">OpenRouter (Nemotron Nano — FREE)</option>
+                    <option value="OPENROUTER">OpenRouter (Gemma 4 26B — FREE)</option>
                     <option value="OLLAMA_CLOUD">Ollama Cloud (token ollama.com)</option>
                     <option value="CODEX">Codex Pro (login OAuth)</option>
                   </optgroup>

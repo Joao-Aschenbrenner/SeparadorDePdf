@@ -1,34 +1,34 @@
 {
   "_comment": "Catalogo de modelos de visao suportados por cada provider. Atualizado automaticamente 1x/mes via .github/workflows/update-models.yml. O server lê este arquivo em runtime com fallback hardcoded em server.ts.",
-  "_updated": "2026-08-19",
+  "_updated": "2026-08-27",
   "providers": {
     "NVIDIA": {
       "baseUrl": "https://integrate.api.nvidia.com",
-      "models": ["nvidia/llama-3.1-nemotron-nano-vl-8b-v1", "meta/llama-3.2-11b-vision-instruct", "meta/llama-3.2-90b-vision-instruct", "nvidia/nemotron-nano-12b-v2-vl"],
+      "models": ["meta/llama-3.2-11b-vision-instruct", "meta/llama-3.2-90b-vision-instruct", "microsoft/phi-3-vision-128k-instruct"],
       "modelsEndpoint": "/v1/models",
       "visionKeywords": ["vision", "vl", "image", "multimodal", "scout", "nemotron-vision", "nemotron-nano", "phi-3-vision", "llama-3.2"],
-      "preferred": ["nvidia/llama-3.1-nemotron-nano-vl-8b-v1"]
+      "preferred": ["meta/llama-3.2-11b-vision-instruct"]
     },
     "GOOGLE": {
       "baseUrl": "https://generativelanguage.googleapis.com",
       "models": ["gemini-2.5-flash", "gemini-2.0-flash"],
       "modelsEndpoint": "/v1beta/models",
       "visionKeywords": ["gemini", "vision"],
-      "preferred": ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+      "preferred": ["gemini-2.5-flash", "gemini-2.0-flash"]
     },
     "OPENAI": {
       "baseUrl": "https://api.openai.com",
       "models": ["gpt-4o", "gpt-4o-mini"],
       "modelsEndpoint": "/v1/models",
       "visionKeywords": ["gpt-4o", "vision"],
-      "preferred": ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"]
+      "preferred": ["gpt-4o", "gpt-4o-mini"]
     },
     "ANTHROPIC": {
       "baseUrl": "https://api.anthropic.com",
       "models": ["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022"],
       "modelsEndpoint": "/v1/models",
       "visionKeywords": ["claude", "sonnet", "opus"],
-      "preferred": ["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022", "claude-3-sonnet-20240229"]
+      "preferred": ["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022"]
     },
     "MISTRAL": {
       "_comment": "Mistral nao tem modelo de visao direta. Usa OCR (v1/ocr) + classificacao em 2 passos.",
@@ -42,10 +42,10 @@
     "OPENROUTER": {
       "_comment": "OpenRouter free models de visao. Sem custo.",
       "baseUrl": "https://openrouter.ai/api",
-      "models": ["nvidia/nemotron-nano-12b-v2-vl:free", "google/gemma-4-26b-a4b-it:free"],
+      "models": ["google/gemma-4-26b-a4b-it:free", "google/gemma-4-31b-it:free"],
       "modelsEndpoint": "/v1/models",
       "visionKeywords": ["vision", "vl", "nemotron", "gemma"],
-      "preferred": ["nvidia/nemotron-nano-12b-v2-vl:free"]
+      "preferred": ["google/gemma-4-26b-a4b-it:free"]
     },
     "LOCAL_OLLAMA": {
       "_comment": "Modelo local rodando via Ollama (http://localhost:11434). Sem chave de API. Modelo baixado automaticamente.",

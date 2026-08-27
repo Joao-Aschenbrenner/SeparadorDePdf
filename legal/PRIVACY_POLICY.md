@@ -24,8 +24,8 @@ Para realizar a extração de metadados, as imagens das páginas dos PDFs são e
 | Anthropic   | https://www.anthropic.com/legal/privacy                       |
 | Mistral     | https://mistral.ai/terms/#privacy-policy                      |
 | NVIDIA      | https://www.nvidia.com/en-us/privacy-policy/                  |
-| Groq        | https://groq.com/privacy-policy/                              |
 | OpenRouter  | https://openrouter.ai/privacy                                 |
+| Ollama      | https://ollama.com/privacy                                    |
 
 ## 4. Segurança
 
