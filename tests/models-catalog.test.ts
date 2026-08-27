@@ -109,6 +109,33 @@ describe("getProviderConfig (catálogo e fallback)", () => {
     expect(getProviderConfig("NVIDIA").model).toBe("meta/llama-3.2-11b-vision-instruct");
     expect(getProviderConfig("OPENROUTER").model).toBe("google/gemma-4-26b-a4b-it:free");
   });
+
+  it("tiers fast/medium/precise existem e apontam para modelos do catálogo", async () => {
+    const { loadModelsCatalog } = await import("../server/server");
+    const catalog = loadModelsCatalog();
+    for (const [provider, entry] of Object.entries(catalog.providers)) {
+      if (!entry.tiers) continue;
+      for (const tier of ["fast", "medium", "precise"] as const) {
+        const m = entry.tiers[tier];
+        expect(m, `${provider}.tiers.${tier} ausente`).toBeDefined();
+        // Modelos de visão não locais devem estar na lista models
+        if (!entry.local) {
+          expect(entry.models, `${provider}.tiers.${tier}=${m} precisa estar em models`).toContain(m);
+        }
+      }
+    }
+  });
+
+  it("NVIDIA tiers usam modelos funcionais (não phi-3-vision quebrado nem nano EOL)", async () => {
+    const { loadModelsCatalog } = await import("../server/server");
+    const nvidia = loadModelsCatalog().providers.NVIDIA;
+    for (const tier of ["fast", "medium", "precise"] as const) {
+      const m = nvidia.tiers![tier];
+      expect(m).not.toBe("microsoft/phi-3-vision-128k-instruct");
+      expect(m).not.toMatch(/nano-12b-v2-vl/);
+    }
+    expect(nvidia.tiers!.precise).toBe("nvidia/nemotron-3-nano-omni-30b-a3b-reasoning");
+  });
 });
 
 describe("Mock dos 8 provedores de IA", () => {

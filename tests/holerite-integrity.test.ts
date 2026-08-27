@@ -327,13 +327,13 @@ describe("Prompt Holerite — Verificação de Conteúdo do Prompt", () => {
 });
 
 describe("pdfToImage Scale — Verificação de Configuração", () => {
-  it("deve usar scale 2.5 em vez de 2.0", async () => {
+  it("deve usar scale 3.0 (resolução maior p/ escaneados)", async () => {
     const fs = await import("fs");
     const path = await import("path");
     const pdfToImagePath = path.join(__dirname, "..", "src", "utils", "pdfToImage.ts");
     const content = fs.readFileSync(pdfToImagePath, "utf8");
 
-    expect(content).toContain("scale: 2.5");
+    expect(content).toContain("scale: 3.0");
     expect(content).not.toContain("scale: 2.0");
   });
 });

@@ -32,6 +32,7 @@ interface ModelsCatalog {
     modelsEndpoint?: string;
     visionKeywords?: string[];
     preferred?: string[];
+    tiers?: Record<string, string>;
     local?: boolean;
     downloadSizes?: Record<string, string>;
     minRamGB?: Record<string, number>;
@@ -92,6 +93,18 @@ function getProviderConfig(provider: string): { baseUrl: string; model: string }
   const fb = FALLBACK_MODELS[provider];
   if (fb) return fb;
   return FALLBACK_MODELS.NVIDIA;
+}
+
+// Novo: retorna o modelo correspondente ao tier solicitado (fast/medium/precise)
+function getModelByTier(provider: string, tier: string): string {
+  const catalog = loadModelsCatalog();
+  const entry = catalog.providers[provider];
+  if (entry && entry.tiers && entry.tiers[tier]) {
+    return entry.tiers[tier];
+  }
+  // Fallback: usa o preferred do catálogo se o tier não existir
+  const cfg = getProviderConfig(provider);
+  return cfg.model;
 }
 
 export { loadModelsCatalog, getProviderConfig, FALLBACK_MODELS };
@@ -354,12 +367,19 @@ IMPORTANTE: Se a página contiver MAIS DE UM documento (ex: 2 holerites lado a l
 Se não encontrar valor, coloque null. Não invente números.
 NÃO escreva NADA antes ou depois do JSON. NÃO use markdown. NÃO use **. NÃO explique o documento. NÃO escreva "Análise do Documento" ou qualquer texto introdutório. A resposta deve SER SOMENTE o JSON, começando com { ou [ e terminando com } ou ]. Qualquer texto fora do JSON é ERRO.
 
+IMPORTANTE — LEIA LITERALMENTE (obrigatório):
+- Leia o TEXTO REAL impresso na imagem. Não invente nomes, empresas, números ou documentos que não estejam visíveis.
+- Se a imagem mostrar uma TABELA/PLANILHA de dados (ex.: "Cadastro de Fornecedores", "Dados de Transparência", "Relação de Pagamentos", "Custeio", planilha de prestação de contas municipal) com várias linhas e colunas, classifique como documentType="planilha", companyName = o TÍTULO/TABELA impresso (ex.: "CADASTRO DE FORNECEDORES") ou "PREFEITURA" se houver brasão/logo municipal, valor=null, pessoaNome=null, notaNumber=null. NÃO tente transcrever cada linha.
+- Se NÃO conseguir ler claramente o conteúdo, retorne documentType="nao_identificado" em vez de inventar nomes/valores.
+- NUNCA responda com descrições como "o documento contém 7 páginas" ou resumos de múltiplos tipos — analise SOMENTE a imagem desta página e retorne o JSON correspondente ao que está nela.
+
 IMPORTANTE sobre valores numéricos: use SEMPRE formato americano com ponto decimal. Exemplo: R$ 5.425,00 deve ser escrito como 5425.00 (sem pontos de milhar, com ponto decimal). Nunca use vírgula como separador decimal no JSON.
 
 ${correction ? `OBSERVAÇÃO DO USUÁRIO: ${correction}. Reavalie o documento com atenção especial nestes campos.\n` : ""}`;
 
 // Seleciona provedor de IA
        const provider = settings.provider || "GOOGLE";
+       const modelTier = settings.modelTier || "medium";
        let aiResponse;
        try {
          // Helper for OpenAI-compatible providers (OpenRouter, NVIDIA)
@@ -371,15 +391,15 @@ ${correction ? `OBSERVAÇÃO DO USUÁRIO: ${correction}. Reavalie o documento co
              body: JSON.stringify({
                model: config.model,
                messages: [{ role: "user", content: [{ type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}`, detail: "high" } }, { type: "text", text: promptText }] }],
-               temperature: 0.1,
-               max_tokens: 1024,
-             }),
+                temperature: 0.1,
+                max_tokens: 1600,
+              }),
            });
          };
 
           if (provider === "GOOGLE") {
             if (!apiKey) throw new Error("Chave de API Google não configurada.");
-            const googleModel = getProviderConfig("GOOGLE").model;
+            const googleModel = getModelByTier("GOOGLE", modelTier);
             const googleUrl = `https://generativelanguage.googleapis.com/v1beta/models/${googleModel}:generateContent?key=${apiKey}`;
             console.log(`[AI] Enviando para Google Gemini (${googleModel})...`);
             aiResponse = await fetch(googleUrl, {
@@ -391,7 +411,7 @@ ${correction ? `OBSERVAÇÃO DO USUÁRIO: ${correction}. Reavalie o documento co
            });
           } else if (provider === "OPENAI") {
             if (!apiKey) throw new Error("Chave de API OpenAI não configurada.");
-            const openaiModel = getProviderConfig("OPENAI").model;
+            const openaiModel = getModelByTier("OPENAI", modelTier);
             console.log(`[AI] Enviando para OpenAI (${openaiModel})...`);
             aiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
               method: "POST",
@@ -406,7 +426,7 @@ ${correction ? `OBSERVAÇÃO DO USUÁRIO: ${correction}. Reavalie o documento co
            });
           } else if (provider === "ANTHROPIC") {
             if (!apiKey) throw new Error("Chave de API Anthropic não configurada.");
-            const anthropicModel = getProviderConfig("ANTHROPIC").model;
+            const anthropicModel = getModelByTier("ANTHROPIC", modelTier);
             console.log(`[AI] Enviando para Anthropic Claude (${anthropicModel})...`);
             aiResponse = await fetch("https://api.anthropic.com/v1/messages", {
               method: "POST",
@@ -419,7 +439,7 @@ ${correction ? `OBSERVAÇÃO DO USUÁRIO: ${correction}. Reavalie o documento co
            });
           } else if (provider === "MISTRAL") {
             if (!apiKey) throw new Error("Chave de API Mistral não configurada.");
-            const mistralModel = getProviderConfig("MISTRAL").model;
+            const mistralModel = getModelByTier("MISTRAL", modelTier);
             console.log(`[AI] Enviando para Mistral OCR (${mistralModel})...`);
             // Mistral não tem visão direta — usa OCR (v1/ocr) para extrair texto da imagem,
             // depois classifica o texto com um modelo de texto (mistral-small-latest).
@@ -453,13 +473,13 @@ ${correction ? `OBSERVAÇÃO DO USUÁRIO: ${correction}. Reavalie o documento co
             aiResponse = classifyRes;
            } else if (provider === "OPENROUTER") {
              if (!apiKey) throw new Error("Chave de API OpenRouter não configurada.");
-             const openrouterModel = getProviderConfig("OPENROUTER").model;
+             const openrouterModel = getModelByTier("OPENROUTER", modelTier);
              console.log(`[AI] Enviando para OpenRouter (${openrouterModel})...`);
              aiResponse = await callOpenAICompatible({ baseUrl: "https://openrouter.ai/api", model: openrouterModel, apiKey }, imageBase64, prompt);
            } else if (provider === "LOCAL_OLLAMA") {
               // Ollama local — sem chave de API. Endpoint /api/chat (não /v1/chat/completions).
-              // O modelo escolhido nas Configurações (settings.model) tem prioridade sobre o default do catálogo.
-              const ollamaLocalModel = settings.model || getProviderConfig("LOCAL_OLLAMA").model;
+              // O modelo escolhido nas Configurações (settings.model) tem prioridade sobre o tier selecionado.
+              const ollamaLocalModel = settings.model || getModelByTier("LOCAL_OLLAMA", modelTier);
               const ollamaConfig = getProviderConfig("LOCAL_OLLAMA");
               console.log(`[AI] Enviando para Ollama local (${ollamaLocalModel})...`);
 
@@ -493,7 +513,7 @@ ${correction ? `OBSERVAÇÃO DO USUÁRIO: ${correction}. Reavalie o documento co
               });
             } else if (provider === "OLLAMA_CLOUD") {
               if (!apiKey) throw new Error("Token Ollama Cloud não configurado. Obtenha em https://ollama.com/signup.");
-              const ollamaCloudModel = getProviderConfig("OLLAMA_CLOUD").model;
+              const ollamaCloudModel = getModelByTier("OLLAMA_CLOUD", modelTier);
               console.log(`[AI] Enviando para Ollama Cloud (${ollamaCloudModel})...`);
               aiResponse = await callOpenAICompatible({ baseUrl: "https://chat.api.ollama.ai", model: ollamaCloudModel, apiKey }, imageBase64, prompt);
             } else if (provider === "CODEX") {
@@ -509,12 +529,12 @@ ${correction ? `OBSERVAÇÃO DO USUÁRIO: ${correction}. Reavalie o documento co
                 } catch (e) { /* ignora */ }
               }
               if (!codexKey) throw new Error("Login Codex necessário. Clique em 'Sign in with ChatGPT' nas Configurações, ou cole uma API key da OpenAI.");
-              const codexModel = getProviderConfig("CODEX").model;
+              const codexModel = getModelByTier("CODEX", modelTier);
               console.log(`[AI] Enviando para OpenAI/Codex (${codexModel})...`);
               aiResponse = await callOpenAICompatible({ baseUrl: "https://api.openai.com", model: codexModel, apiKey: codexKey }, imageBase64, prompt);
             } else {
               // NVIDIA (padrão)
-              const nvidiaModel = getProviderConfig("NVIDIA").model;
+              const nvidiaModel = getModelByTier("NVIDIA", modelTier);
               console.log(`[AI] Enviando para NVIDIA (${nvidiaModel})...`);
               aiResponse = await callOpenAICompatible({ baseUrl: "https://integrate.api.nvidia.com", model: nvidiaModel, apiKey }, imageBase64, prompt);
             }
@@ -643,22 +663,22 @@ app.get("/api/settings", (req, res) => {
       const data = JSON.parse(fs.readFileSync(SETTINGS_FILE, "utf8"));
       return res.json(data);
     }
-    return res.json({ provider: "NVIDIA", apiKey: "", model: "" });
+    return res.json({ provider: "NVIDIA", apiKey: "", model: "", modelTier: "medium" });
   } catch {
-    return res.json({ provider: "NVIDIA", apiKey: "", model: "" });
+    return res.json({ provider: "NVIDIA", apiKey: "", model: "", modelTier: "medium" });
   }
 });
 
 app.post("/api/settings", (req, res) => {
   try {
     ensureDataDir();
-    const { provider, apiKey, model } = req.body;
+    const { provider, apiKey, model, modelTier } = req.body;
     if (!provider || apiKey === undefined) {
       return res.status(400).json({ error: "Provider e apiKey são obrigatórios." });
     }
-    const settings = { provider: provider.toUpperCase(), apiKey, model: typeof model === "string" ? model : "" };
+    const settings = { provider: provider.toUpperCase(), apiKey, model: typeof model === "string" ? model : "", modelTier: (modelTier || "medium").toLowerCase() };
     fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2), "utf8");
-    console.log(`[settings] Saved: provider=${settings.provider} model=${settings.model || "(default)"}`);
+    console.log(`[settings] Saved: provider=${settings.provider} modelTier=${settings.modelTier} model=${settings.model || "(default)"}`);
     return res.json({ success: true });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
@@ -672,8 +692,36 @@ function getSettings() {
       return JSON.parse(fs.readFileSync(SETTINGS_FILE, "utf8"));
     }
   } catch {}
-  return { provider: "NVIDIA", apiKey: "", model: "" };
+  return { provider: "NVIDIA", apiKey: "", model: "", modelTier: "medium" };
 }
+
+// ─── Models API ───────────────────────────────────────
+app.get("/api/models", (req, res) => {
+  try {
+    ensureDataDir();
+    const catalog = loadModelsCatalog();
+    // Return a simplified version with just the essential info for the frontend
+    const simplified: Record<string, { 
+      baseUrl: string; 
+      models: string[]; 
+      tiers: Record<string, string>;
+      preferred: string[] | undefined;
+    }> = {};
+    
+    for (const [provider, entry] of Object.entries(catalog.providers)) {
+      simplified[provider] = {
+        baseUrl: entry.baseUrl,
+        models: entry.models,
+        tiers: entry.tiers || {},
+        preferred: entry.preferred
+      };
+    }
+    
+    return res.json(simplified);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
 
 // ─── Upload Logs API ──────────────────────────────────
 app.get("/api/logs", (req, res) => {

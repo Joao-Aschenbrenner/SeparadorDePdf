@@ -1,78 +1,228 @@
 {
-  "_comment": "Catalogo de modelos de visao suportados por cada provider. Atualizado automaticamente 1x/mes via .github/workflows/update-models.yml. O server lê este arquivo em runtime com fallback hardcoded em server.ts.",
+  "_comment": "Catalogo de modelos de visao suportados por cada provider. Atualizado automaticamente 1x por mes via .github/workflows/update-models.yml. O server lê este arquivo em runtime com fallback hardcoded em server.ts.",
   "_updated": "2026-08-27",
   "providers": {
     "NVIDIA": {
       "baseUrl": "https://integrate.api.nvidia.com",
-      "models": ["meta/llama-3.2-11b-vision-instruct", "meta/llama-3.2-90b-vision-instruct", "microsoft/phi-3-vision-128k-instruct"],
+      "models": [
+        "meta/llama-3.2-11b-vision-instruct",
+        "meta/llama-3.2-90b-vision-instruct",
+        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"
+      ],
+      "tiers": {
+        "fast": "meta/llama-3.2-11b-vision-instruct",
+        "medium": "meta/llama-3.2-11b-vision-instruct",
+        "precise": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"
+      },
       "modelsEndpoint": "/v1/models",
-      "visionKeywords": ["vision", "vl", "image", "multimodal", "scout", "nemotron-vision", "nemotron-nano", "phi-3-vision", "llama-3.2"],
-      "preferred": ["meta/llama-3.2-11b-vision-instruct"]
+      "visionKeywords": [
+        "vision",
+        "vl",
+        "image",
+        "multimodal",
+        "scout",
+        "nemotron-vision",
+        "nemotron-nano",
+        "phi-3-vision",
+        "llama-3.2",
+        "neva",
+        "vila",
+        "omni"
+      ],
+      "preferred": [
+        "meta/llama-3.2-11b-vision-instruct"
+      ]
     },
     "GOOGLE": {
       "baseUrl": "https://generativelanguage.googleapis.com",
-      "models": ["gemini-2.5-flash", "gemini-2.0-flash"],
+      "models": [
+        "gemini-2.5-flash-lite",
+        "gemini-2.5-flash",
+        "gemini-2.5-pro"
+      ],
+      "tiers": {
+        "fast": "gemini-2.5-flash-lite",
+        "medium": "gemini-2.5-flash",
+        "precise": "gemini-2.5-pro"
+      },
       "modelsEndpoint": "/v1beta/models",
-      "visionKeywords": ["gemini", "vision"],
-      "preferred": ["gemini-2.5-flash", "gemini-2.0-flash"]
+      "visionKeywords": [
+        "gemini",
+        "vision"
+      ],
+      "preferred": [
+        "gemini-2.5-flash",
+        "gemini-2.5-pro"
+      ]
     },
     "OPENAI": {
       "baseUrl": "https://api.openai.com",
-      "models": ["gpt-4o", "gpt-4o-mini"],
+      "models": [
+        "gpt-4o",
+        "gpt-4o-mini"
+      ],
+      "tiers": {
+        "fast": "gpt-4o-mini",
+        "medium": "gpt-4o",
+        "precise": "gpt-4o"
+      },
       "modelsEndpoint": "/v1/models",
-      "visionKeywords": ["gpt-4o", "vision"],
-      "preferred": ["gpt-4o", "gpt-4o-mini"]
+      "visionKeywords": [
+        "gpt-4o",
+        "vision"
+      ],
+      "preferred": [
+        "gpt-4o",
+        "gpt-4o-mini"
+      ]
     },
     "ANTHROPIC": {
       "baseUrl": "https://api.anthropic.com",
-      "models": ["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022"],
+      "models": [
+        "claude-sonnet-4-20250514",
+        "claude-3-5-sonnet-20241022"
+      ],
+      "tiers": {
+        "fast": "claude-3-5-sonnet-20241022",
+        "medium": "claude-sonnet-4-20250514",
+        "precise": "claude-sonnet-4-20250514"
+      },
       "modelsEndpoint": "/v1/models",
-      "visionKeywords": ["claude", "sonnet", "opus"],
-      "preferred": ["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022"]
+      "visionKeywords": [
+        "claude",
+        "sonnet",
+        "opus"
+      ],
+      "preferred": [
+        "claude-sonnet-4-20250514",
+        "claude-3-5-sonnet-20241022"
+      ]
     },
     "MISTRAL": {
       "_comment": "Mistral nao tem modelo de visao direta. Usa OCR (v1/ocr) + classificacao em 2 passos.",
       "baseUrl": "https://api.mistral.ai",
-      "models": ["mistral-ocr-latest"],
+      "models": [
+        "mistral-ocr-latest"
+      ],
       "modelsEndpoint": "/v1/models",
-      "visionKeywords": ["ocr"],
-      "preferred": ["mistral-ocr-latest"],
-      "ocrOnly": true
+      "visionKeywords": [
+        "ocr"
+      ],
+      "preferred": [
+        "mistral-ocr-latest"
+      ],
+      "ocrOnly": true,
+      "tiers": {
+        "fast": "mistral-ocr-latest",
+        "medium": "mistral-ocr-latest",
+        "precise": "mistral-ocr-latest"
+      }
     },
     "OPENROUTER": {
-      "_comment": "OpenRouter free models de visao. Sem custo.",
+      "_comment": "OpenRouter free models de visao.",
       "baseUrl": "https://openrouter.ai/api",
-      "models": ["google/gemma-4-26b-a4b-it:free", "google/gemma-4-31b-it:free"],
+      "models": [
+        "google/gemma-4-26b-a4b-it:free",
+        "google/gemma-4-31b-it:free",
+        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+      ],
+      "tiers": {
+        "fast": "google/gemma-4-26b-a4b-it:free",
+        "medium": "google/gemma-4-31b-it:free",
+        "precise": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+      },
       "modelsEndpoint": "/v1/models",
-      "visionKeywords": ["vision", "vl", "nemotron", "gemma"],
-      "preferred": ["google/gemma-4-26b-a4b-it:free"]
+      "visionKeywords": [
+        "vision",
+        "vl",
+        "nemotron",
+        "gemma",
+        "omni"
+      ],
+      "preferred": [
+        "google/gemma-4-26b-a4b-it:free"
+      ]
     },
     "LOCAL_OLLAMA": {
       "_comment": "Modelo local rodando via Ollama (http://localhost:11434). Sem chave de API. Modelo baixado automaticamente.",
       "baseUrl": "http://localhost:11434",
-      "models": ["llama3.2-vision:11b", "llama3.2-vision:90b", "moondream:1.8b"],
+      "models": [
+        "llama3.2-vision:11b",
+        "llama3.2-vision:90b",
+        "moondream:1.8b"
+      ],
       "modelsEndpoint": "/api/tags",
-      "visionKeywords": ["vision", "vl", "moondream", "llama"],
-      "preferred": ["llama3.2-vision:11b"],
+      "visionKeywords": [
+        "vision",
+        "vl",
+        "moondream",
+        "llama"
+      ],
+      "preferred": [
+        "llama3.2-vision:11b"
+      ],
       "local": true,
-      "downloadSizes": { "llama3.2-vision:11b": "7.8GB", "llama3.2-vision:90b": "55GB", "moondream:1.8b": "1.3GB" },
-      "minRamGB": { "llama3.2-vision:11b": 8, "llama3.2-vision:90b": 32, "moondream:1.8b": 4 }
+      "downloadSizes": {
+        "llama3.2-vision:11b": "7.8GB",
+        "llama3.2-vision:90b": "55GB",
+        "moondream:1.8b": "1.3GB"
+      },
+      "minRamGB": {
+        "llama3.2-vision:11b": 8,
+        "llama3.2-vision:90b": 32,
+        "moondream:1.8b": 4
+      },
+      "tiers": {
+        "fast": "moondream:1.8b",
+        "medium": "llama3.2-vision:11b",
+        "precise": "llama3.2-vision:90b"
+      }
     },
     "OLLAMA_CLOUD": {
       "_comment": "Ollama Cloud (chat.api.ollama.ai) — requer token em https://ollama.com/signup. Mesma API OpenAI-compat.",
       "baseUrl": "https://chat.api.ollama.ai",
-      "models": ["llama3.2-vision:11b", "llama3.2-vision:90b"],
+      "models": [
+        "llama3.2-vision:11b",
+        "llama3.2-vision:90b"
+      ],
       "modelsEndpoint": "/v1/models",
-      "visionKeywords": ["vision", "vl", "llama"],
-      "preferred": ["llama3.2-vision:11b"]
+      "visionKeywords": [
+        "vision",
+        "vl",
+        "llama"
+      ],
+      "preferred": [
+        "llama3.2-vision:11b"
+      ],
+      "tiers": {
+        "fast": "llama3.2-vision:11b",
+        "medium": "llama3.2-vision:11b",
+        "precise": "llama3.2-vision:90b"
+      }
     },
     "CODEX": {
       "_comment": "Codex Pro = plano ChatGPT Pro da OpenAI. Usa a mesma API da OpenAI com a chave do usuario. Login = colar API key de platform.openai.com.",
       "baseUrl": "https://api.openai.com",
-      "models": ["gpt-4o", "gpt-4o-mini", "o4-mini"],
+      "models": [
+        "gpt-4o",
+        "gpt-4o-mini",
+        "o4-mini"
+      ],
       "modelsEndpoint": "/v1/models",
-      "visionKeywords": ["gpt-4o", "vision", "o4"],
-      "preferred": ["gpt-4o", "gpt-4o-mini"]
+      "visionKeywords": [
+        "gpt-4o",
+        "vision",
+        "o4"
+      ],
+      "preferred": [
+        "gpt-4o",
+        "gpt-4o-mini"
+      ],
+      "tiers": {
+        "fast": "gpt-4o-mini",
+        "medium": "gpt-4o",
+        "precise": "gpt-4o"
+      }
     }
   }
 }

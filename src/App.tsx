@@ -83,6 +83,12 @@ const OLLAMA_MODELS = [
   { id: "llama3.2-vision:90b", label: "Llama 3.2 Vision 90B", size: "55 GB", minRam: 32, desc: "Preciso — PCs robustos (32GB+ RAM)" },
 ];
 
+const MODEL_TIERS = [
+  { value: "fast", label: "Rápido", hint: "menos preciso" },
+  { value: "medium", label: "Equilibrado", hint: "recomendado" },
+  { value: "precise", label: "Preciso", hint: "mais lento" },
+];
+
 function OllamaLocalSetup({ model, onModelChange }: { model: string; onModelChange: (m: string) => void }) {
   const [hw, setHw] = useState<{ totalMemGB: number; cpuCores: number; gpu: string; hasGpu: boolean; suggestedModel: string; reason: string } | null>(null);
   const [installState, setInstallState] = useState<"idle" | "checking" | "downloading" | "installing" | "pulling" | "done" | "error">("idle");
@@ -344,6 +350,8 @@ export default function App() {
   const [settingsProvider, setSettingsProvider] = useState("NVIDIA");
   const [settingsApiKey, setSettingsApiKey] = useState("");
   const [settingsLocalModel, setSettingsLocalModel] = useState("");
+  const [settingsModelTier, setSettingsModelTier] = useState("medium");
+  const [modelCatalog, setModelCatalog] = useState<Record<string, { tiers?: Record<string, string> }>>({});
   const [currentProvider, setCurrentProvider] = useState("NVIDIA");
   const [savingSettings, setSavingSettings] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
@@ -361,12 +369,14 @@ export default function App() {
       if (s.provider) setSettingsProvider(s.provider);
       if (s.apiKey) setSettingsApiKey(s.apiKey);
       if (s.model) setSettingsLocalModel(s.model);
+      if (s.modelTier) setSettingsModelTier(s.modelTier);
       if (!s.apiKey) {
         setTimeout(() => setShowFirstTimeWarning(true), 800);
       }
     }).catch(() => {
       setTimeout(() => setShowFirstTimeWarning(true), 800);
     });
+    fetch("/api/models").then(r => r.json()).then(c => setModelCatalog(c)).catch(() => {});
   }, []);
 
   // Update overlay
@@ -825,7 +835,7 @@ export default function App() {
       const res = await fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider: settingsProvider, apiKey: settingsApiKey, model: settingsLocalModel }),
+        body: JSON.stringify({ provider: settingsProvider, apiKey: settingsApiKey, model: settingsLocalModel, modelTier: settingsModelTier }),
       });
       if (res.ok) {
         setCurrentProvider(settingsProvider);
@@ -1654,6 +1664,26 @@ export default function App() {
                   </optgroup>
                 </select>
               </div>
+
+              {settingsProvider !== "LOCAL_OLLAMA" && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">Precisão do modelo</label>
+                  <select
+                    value={settingsModelTier}
+                    onChange={e => setSettingsModelTier(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 cursor-pointer"
+                  >
+                    {MODEL_TIERS.map(t => {
+                      const modelName = modelCatalog[settingsProvider]?.tiers?.[t.value];
+                      return (
+                        <option key={t.value} value={t.value}>
+                          {t.label} — {t.hint}{modelName ? ` (${modelName})` : ""}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+              )}
 
               {settingsProvider === "LOCAL_OLLAMA" ? (
                 <OllamaLocalSetup model={settingsLocalModel} onModelChange={setSettingsLocalModel} />

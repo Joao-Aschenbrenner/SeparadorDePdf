@@ -62,6 +62,21 @@ function pickPreferred(models, preferredList, keywords) {
   return ordered;
 }
 
+// Preserva os tiers curados manualmente; apenas poda aqueles cujo modelo sumiu da API.
+// Tiers são: fast (rápido/menos preciso), medium (equilibrado), precise (lento/mais preciso).
+function pruneTiers(entry, models) {
+  const old = entry.tiers || {};
+  const fallbacks = {
+    fast: models[0],
+    medium: models[Math.floor(models.length / 2)] || models[0],
+    precise: models[models.length - 1] || models[0],
+  };
+  entry.tiers = {};
+  for (const key of ["fast", "medium", "precise"]) {
+    entry.tiers[key] = models.includes(old[key]) ? old[key] : fallbacks[key];
+  }
+}
+
 async function fetchJson(url, headers) {
   const res = await fetch(url, { headers });
   if (!res.ok) {
@@ -96,6 +111,10 @@ async function updateProvider(catalog, providerName) {
       models = pickPreferred(models, entry.preferred, GOOGLE.keywords);
       if (models.length === 0) { warn("Google retornou 0 modelos de visão, mantendo atuais."); return false; }
       entry.models = models;
+      
+      // Preserva tiers curados (poda apenas modelos que sumiram da API)
+      pruneTiers(entry, models);
+      
       log(`GOOGLE: ${models.length} modelos. Primeiro: ${models[0]}`);
       return true;
     } catch (e) { warn(`Falha GOOGLE: ${e.message}`); return false; }
@@ -110,6 +129,10 @@ async function updateProvider(catalog, providerName) {
       models = pickPreferred(models, entry.preferred, ANTHROPIC.keywords);
       if (models.length === 0) { warn("Anthropic retornou 0 modelos, mantendo atuais."); return false; }
       entry.models = models;
+      
+      // Preserva tiers curados (poda apenas modelos que sumiram da API)
+      pruneTiers(entry, models);
+      
       log(`ANTHROPIC: ${models.length} modelos. Primeiro: ${models[0]}`);
       return true;
     } catch (e) { warn(`Falha ANTHROPIC: ${e.message}`); return false; }
@@ -125,9 +148,13 @@ async function updateProvider(catalog, providerName) {
     if (cfg.filterPrefix) models = models.filter((m) => m.startsWith(cfg.filterPrefix));
     models = pickPreferred(models, entry.preferred, cfg.keywords);
     if (models.length === 0) { warn(`${providerName} retornou 0 modelos de visão, mantendo atuais.`); return false; }
-    entry.models = models;
-    log(`${providerName}: ${models.length} modelos. Primeiro: ${models[0]}`);
-    return true;
+      entry.models = models;
+      
+      // Preserva tiers curados (poda apenas modelos que sumiram da API)
+      pruneTiers(entry, models);
+      
+      log(`${providerName}: ${models.length} modelos. Primeiro: ${models[0]}`);
+      return true;
   } catch (e) { warn(`Falha ${providerName}: ${e.message}`); return false; }
 }
 
